@@ -2,25 +2,18 @@
 
 This open-source project contains the Pytorch implementation of DRILL, training and evaluation scripts. 
 To foster further reproducible research and alleviate hardware requirements to reproduce the reported results, we provide pretrained models on all datasets.
-
-# Install Ontolearn
-wget --no-check-certificate --content-disposition https://github.com/dice-group/Ontolearn/archive/refs/tags/v.0.0.1.zip
-unzip Ontolearn-v.0.0.1.zip
-cd Ontolearn-v.0.0.1
-conda create --name temp python=3.8
-conda activate temp
-pip install -e .
-
 # Installation
 Create a anaconda virtual environment and install dependencies.
 ```
-git clone https://github.com/dice-group/DRILL
+git clone https://github.com/dice-group/DRILL_RAKI
 # Create anaconda virtual enviroment
 conda create -n drill_env python=3.9
 # Active virtual enviroment 
 conda activate drill_env
-cd DRILL
-# Install our developed framework. It may take few minutes
+cd DRILL_RAKI
+wget --no-check-certificate --content-disposition https://github.com/dice-group/Ontolearn/archive/refs/tags/v.0.0.1.zip
+unzip Ontolearn-v.0.0.1.zip
+cd Ontolearn-v.0.0.1
 pip install -e .
 # For the Endpoint
 pip install flask==2.1.2
