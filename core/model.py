@@ -276,7 +276,7 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
         """
         assert isinstance(pos, set) and isinstance(neg, set)
         assert sum([type(_) == OWLNamedIndividual for _ in pos]) == len(pos)
-        assert sum([type(_) == OWLNamedIndividual for _ in pos]) == len(neg)
+        assert sum([type(_) == OWLNamedIndividual for _ in neg]) == len(neg)
 
         if max_runtime:
             assert isinstance(max_runtime, int)
