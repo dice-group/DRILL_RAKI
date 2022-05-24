@@ -13,7 +13,7 @@ conda create -n drill_env python=3.9
 # Active virtual enviroment 
 conda activate drill_env
 cd DRILL_RAKI
-wget --no-check-certificate --content-disposition https://github.com/dice-group/Ontolearn/archive/refs/tags/v.0.0.1.zip
+wget --no-check-certificate --content-disposition https://github.com/dice-group/Ontolearn/archive/refs/tags/0.5.1.zip
 unzip Ontolearn-v.0.0.1.zip
 cd Ontolearn-v.0.0.1
 pip install -e .
@@ -41,7 +41,7 @@ As a result of this execution, a log file is created. This log file contains a s
 ### Run Endpoint for DRILL
 To use the endpoint for a pretrained agent, provide the path of the knowledge base as well as the pretrained agent.
 ```
-python flask_end_point.py --pretrained_drill_avg_path "Log/20220524_141503_224408/DrillHeuristic_averaging.pth" --path_knowledge_base "KGs/Biopax/biopax.owl" --path_knowledge_base_embeddings "embeddings/ConEx_Biopax/ConEx_entity_embeddings.csv"
+python flask_end_point.py --pretrained_drill_avg_path "Log/20220524_140044_663427/DrillHeuristic_averaging.pth" --path_knowledge_base "KGs/Biopax/biopax.owl" --path_knowledge_base_embeddings "embeddings/ConEx_Biopax/ConEx_entity_embeddings.csv"
 ```
 ### Send a Request
 ```

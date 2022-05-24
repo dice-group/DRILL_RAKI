@@ -6,7 +6,6 @@ from pathlib import Path
 import tempfile
 import time
 from datetime import datetime
-
 from argparse import ArgumentParser
 from functools import wraps, update_wrapper
 from flask import Flask, request, Response, abort
@@ -70,7 +69,6 @@ def create_flask_app():
             app.logger.debug(learning_problem)
             no_of_hypotheses = request.form.get("no_of_hypotheses", 1, type=int)
             try:
-                from owlapy.model import IRI
                 typed_pos = set(map(OWLNamedIndividual, map(IRI.create, set(learning_problem["positives"]))))
                 typed_neg = set(map(OWLNamedIndividual, map(IRI.create, set(learning_problem["negatives"]))))
                 drill.fit(typed_pos, typed_neg,
@@ -78,14 +76,12 @@ def create_flask_app():
             except Exception as e:
                 app.logger.debug(e)
                 abort(400)
-            import tempfile
             tmp = tempfile.NamedTemporaryFile()
             try:
                 drill.save_best_hypothesis(no_of_hypotheses, tmp.name)
             except Exception as ex:
                 print(ex)
             hypotheses_ser = io.open(tmp.name+'.owl', mode="r", encoding="utf-8").read()
-            from pathlib import Path
             Path(tmp.name+'.owl').unlink(True)
             return Response(hypotheses_ser, mimetype="application/rdf+xml")
         finally:

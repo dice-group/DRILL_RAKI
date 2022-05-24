@@ -60,6 +60,8 @@ from sortedcontainers import SortedSet
 logger = logging.getLogger(__name__)
 
 _concept_operand_sorter = ConceptOperandSorter()
+
+
 class AbstractDrill:
     """
     Abstract class for Convolutional DQL concept learning
@@ -144,6 +146,7 @@ class AbstractDrill:
         Save weights and training data after training phase.
         @return:
         """
+
 
 class Drill(AbstractDrill, RefinementBasedConceptLearner):
     def __init__(self, knowledge_base,
@@ -275,9 +278,19 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
         \\forall e in E^- K \\not\\model h(e)
         """
         assert isinstance(pos, set) and isinstance(neg, set)
-        assert sum([type(_) == OWLNamedIndividual for _ in pos]) == len(pos)
+        try:
+            assert len(pos) > 0
+        except AssertionError:
+            raise AssertionError(f'The number of positive examples can not be less than 1. Currently: {len(pos)}')
+        try:
+            assert sum([type(_) == OWLNamedIndividual for _ in pos]) == len(pos)
+        except AssertionError:
+            raise AssertionError(f'Items in positive set must be an instance **OWLNamedIndividual**. Currently: {pos}')
         assert sum([type(_) == OWLNamedIndividual for _ in neg]) == len(neg)
 
+        # To obtain random negative examples.
+        if len(neg) == 0:
+            neg = set(random.sample([i for i in self.kb.individuals()], len(pos)))
         if max_runtime:
             assert isinstance(max_runtime, int)
             self.max_runtime = max_runtime
@@ -333,6 +346,8 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
         dataset is a list of tuples where the first item is either str or OWL class expression indicating target concept
         """
         if max_runtime:
+            assert isinstance(max_runtime, int)
+            assert max_runtime > 0
             self.max_runtime = max_runtime
         renderer = DLSyntaxObjectRenderer()
 
@@ -342,7 +357,7 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
                 logger.info(f'TARGET OWL CLASS EXPRESSION:\n{target_ce}')
                 logger.info(f'|Sampled Positive|:{len(p)}\t|Sampled Negative|:{len(n)}')
             start_time = time.time()
-            self.fit(pos=p, neg=n, max_runtime=max_runtime)
+            self.fit(pos=p, neg=set(), max_runtime=max_runtime)
             rn = time.time() - start_time
             h: RL_State = next(iter(self.best_hypotheses()))
             # TODO:CD: We need to remove this first returned boolean for the sake of readability.
@@ -900,8 +915,8 @@ class DrillNet(nn.Module):
 
     def init(self):
         pass
-        #xavier_normal_(self.fc1.weight.data)
-        #xavier_normal_(self.conv1.weight.data)
+        # xavier_normal_(self.fc1.weight.data)
+        # xavier_normal_(self.conv1.weight.data)
 
     def __sanity_checking(self, X):
         return self.forward(X)
@@ -913,7 +928,6 @@ class DrillNet(nn.Module):
         X = X.view(X.shape[0], X.shape[1] * X.shape[2] * X.shape[3])
         X = F.relu(self.fc1(X))
         return self.fc2(X)
-
 
 
 class Experience:

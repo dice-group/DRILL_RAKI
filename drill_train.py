@@ -140,10 +140,8 @@ class Trainer:
                       num_episodes_per_replay=self.args.num_episodes_per_replay, learning_rate=self.args.learning_rate,
                       num_of_sequential_actions=self.args.num_of_sequential_actions, num_episode=self.args.num_episode)
 
-        #drill.train(balanced_examples)
-
+        drill.train(balanced_examples)
         drill.save_weights()
-
         for result_dict, learning_problem in zip(
                 drill.fit_from_iterable(balanced_examples, max_runtime=self.args.max_test_time_per_concept),
                 balanced_examples):
