@@ -41,7 +41,7 @@ As a result of this execution, a log file is created. This log file contains a s
 ### Run Endpoint for DRILL
 To use the endpoint for a pretrained agent, provide the path of the knowledge base as well as the pretrained agent.
 ```
-python flask_end_point.py --pretrained_drill_avg_path "Log/20220524_125502_665711/DrillHeuristic_averaging.pth" --path_knowledge_base "KGs/Biopax/biopax.owl" --path_knowledge_base_embeddings "embeddings/ConEx_Biopax/ConEx_entity_embeddings.csv"
+python flask_end_point.py --pretrained_drill_avg_path "Log/20220524_141503_224408/DrillHeuristic_averaging.pth" --path_knowledge_base "KGs/Biopax/biopax.owl" --path_knowledge_base_embeddings "embeddings/ConEx_Biopax/ConEx_entity_embeddings.csv"
 ```
 ### Send a Request
 ```

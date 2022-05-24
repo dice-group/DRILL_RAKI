@@ -1,110 +1,41 @@
-import ontolearn
-from core import helper_classes
-from core.model import Drill
-from ontolearn.knowledge_base import KnowledgeBase
-from ontolearn.learning_problem_generator import LearningProblemGenerator
-from ontolearn.refinement_operators import LengthBasedRefinement
-# from ontolearn import KnowledgeBase, LearningProblemGenerator#, DrillAverage, DrillProbabilistic
-# from ontolearn.util import sanity_checking_args
-
-from owlapy.model import OWLNamedIndividual
-from owlapy.model import IRI
 import os
 import json
-
-import random
-import torch
-import numpy as np
-
+import io
+import threading
 from pathlib import Path
 import tempfile
-import io
+import time
+from datetime import datetime
+
 from argparse import ArgumentParser
-from ontolearn.knowledge_base import KnowledgeBase
-from ontolearn.learning_problem_generator import LearningProblemGenerator
+from functools import wraps, update_wrapper
+from flask import Flask, request, Response, abort
+from flask import make_response
+
+
+import ontolearn
+from core.model import Drill
+from ontolearn.refinement_operators import LengthBasedRefinement
 from ontolearn.metrics import F1
-from ontolearn.heuristics import Reward
-from owlapy.model import OWLOntology, OWLReasoner
 from ontolearn.utils import setup_logging
+from ontolearn.knowledge_base import KnowledgeBase
+
+from owlapy.model import OWLOntology, OWLReasoner
+from owlapy.model import OWLNamedIndividual
+from owlapy.model import IRI
+
 
 import logging
-import operator
-import random
-import time
-from collections import deque
-from contextlib import contextmanager
-from itertools import islice, chain
-
-from typing import Any, Callable, Dict, FrozenSet, Set, List, Tuple, Iterable, Optional, Generator, SupportsFloat
-
-import torch
-from torch import nn
-from torch.functional import F
-from torch.nn.init import xavier_normal_
-from deap import gp, tools, base, creator
-
-from ontolearn.knowledge_base import KnowledgeBase
-
-from ontolearn.core.owl.utils import EvaluatedDescriptionSet, ConceptOperandSorter, OperandSetTransform
-from ontolearn.data_struct import PrepareBatchOfTraining, PrepareBatchOfPrediction
-from ontolearn.ea_algorithms import AbstractEvolutionaryAlgorithm, EASimple
-from ontolearn.ea_initialization import AbstractEAInitialization, EARandomInitialization, EARandomWalkInitialization
-from ontolearn.ea_utils import PrimitiveFactory, OperatorVocabulary, ToolboxVocabulary, Tree, escape, ind_to_string, \
-    owlliteral_to_primitive_string
-from ontolearn.fitness_functions import LinearPressureFitness
-from ontolearn.heuristics import OCELHeuristic
-from ontolearn.knowledge_base import EvaluatedConcept
-from ontolearn.learning_problem import PosNegLPStandard, EncodedPosNegLPStandard
-from ontolearn.metrics import Accuracy, F1
-
-from ontolearn.utils import oplogging, create_experiment_folder
-from ontolearn.value_splitter import AbstractValueSplitter, BinningValueSplitter, EntropyValueSplitter
-
-from owlapy.render import DLSyntaxObjectRenderer
-from owlapy.util import OrderedOWLObject
-from sortedcontainers import SortedSet
-
-import io
-import threading
-from argparse import ArgumentParser
-from datetime import datetime
-from functools import wraps, update_wrapper
-from typing import List
-
-from flask import Flask, request, Response, abort
-from flask import make_response
-from owlapy.model import OWLNamedIndividual
-
-from ontolearn.heuristics import Reward
-from ontolearn.metrics import F1
-from ontolearn.concept_learner import Drill
-from ontolearn.refinement_operators import LengthBasedRefinement
-from ontolearn.search import Node
-import io
-import threading
-from argparse import ArgumentParser
-from datetime import datetime
-from functools import wraps, update_wrapper
-from typing import List
-
-from flask import Flask, request, Response, abort
-from flask import make_response
-from owlapy.model import OWLNamedIndividual
-
-from ontolearn.heuristics import Reward
-from ontolearn.metrics import F1
-from ontolearn.concept_learner import Drill
-from ontolearn.refinement_operators import LengthBasedRefinement
-from ontolearn.search import Node
-
-random_seed = 1
-random.seed(random_seed)
-torch.manual_seed(random_seed)
-np.random.seed(random_seed)
-
 setup_logging()
-
 logger = logging.getLogger(__name__)
+
+# @ TODO: We may want to provide an endpoint without threading.
+kb = None
+drill = None
+args = None
+lock = threading.Lock()
+loading: bool = False
+ready: bool = False
 
 def nocache(view):
     @wraps(view)
@@ -117,23 +48,6 @@ def nocache(view):
         return response
 
     return update_wrapper(no_cache, view)
-
-lock = threading.Lock()
-loading: bool = False
-ready: bool = False
-
-def ClosedWorld_ReasonerFactory(onto: OWLOntology) -> OWLReasoner:
-    from owlapy.owlready2 import OWLOntology_Owlready2
-    from owlapy.owlready2.temp_classes import OWLReasoner_Owlready2_TempClasses
-    from owlapy.fast_instance_checker import OWLReasoner_FastInstanceChecker
-    assert isinstance(onto, OWLOntology_Owlready2)
-    base_reasoner = OWLReasoner_Owlready2_TempClasses(ontology=onto)
-    reasoner = OWLReasoner_FastInstanceChecker(ontology=onto,
-                                               base_reasoner=base_reasoner,
-                                               negation_default=True)
-    return reasoner
-
-
 def create_flask_app():
     app = Flask(__name__, instance_relative_config=True, )
 
@@ -203,54 +117,16 @@ def create_flask_app():
 
     return app
 
-
-kb = None
-
-drill = None
-
-args = None
-
-if __name__ == '__main__':
-    parser = ArgumentParser()
-    # General
-    parser.add_argument("--path_knowledge_base", type=str)
-    parser.add_argument("--path_knowledge_base_embeddings", type=str)
-    parser.add_argument('--num_workers', type=int, default=1, help='Number of cpus used during batching')
-    parser.add_argument("--verbose", type=int, default=0, help='Higher integer reflects more info during computation')
-
-    # Concept Generation Related
-    parser.add_argument("--min_num_concepts", type=int, default=1)
-    parser.add_argument("--min_length", type=int, default=3, help='Min length of concepts to be used')
-    parser.add_argument("--max_length", type=int, default=5, help='Max length of concepts to be used')
-    parser.add_argument("--min_num_instances_ratio_per_concept", type=float, default=.01)  # %1
-    parser.add_argument("--max_num_instances_ratio_per_concept", type=float, default=.90)  # %30
-    parser.add_argument("--num_of_randomly_created_problems_per_concept", type=int, default=1)
-    # DQL related
-    parser.add_argument("--num_episode", type=int, default=1, help='Number of trajectories created for a given lp.')
-    parser.add_argument('--relearn_ratio', type=int, default=1,
-                        help='Number of times the set of learning problems are reused during training.')
-    parser.add_argument("--gamma", type=float, default=.99, help='The discounting rate')
-    parser.add_argument("--epsilon_decay", type=float, default=.01, help='Epsilon greedy trade off per epoch')
-    parser.add_argument("--max_len_replay_memory", type=int, default=1024,
-                        help='Maximum size of the experience replay')
-    parser.add_argument("--num_epochs_per_replay", type=int, default=2,
-                        help='Number of epochs on experience replay memory')
-    parser.add_argument("--num_episodes_per_replay", type=int, default=10, help='Number of episodes per repay')
-    parser.add_argument('--num_of_sequential_actions', type=int, default=3, help='Length of the trajectory.')
-
-    # The next two params shows the flexibility of our framework as agents can be continuously trained
-    parser.add_argument('--pretrained_drill_avg_path', type=str,
-                        default='', help='Provide a path of .pth file')
-    # NN related
-    parser.add_argument("--batch_size", type=int, default=512)
-    parser.add_argument("--learning_rate", type=int, default=.01)
-    parser.add_argument("--drill_first_out_channels", type=int, default=32)
-
-    # Concept Learning Testing
-    parser.add_argument("--iter_bound", type=int, default=10_000, help='iter_bound during testing.')
-    parser.add_argument('--max_test_time_per_concept', type=int, default=3, help='Max. runtime during testing')
-
-
+def ClosedWorld_ReasonerFactory(onto: OWLOntology) -> OWLReasoner:
+    from owlapy.owlready2 import OWLOntology_Owlready2
+    from owlapy.owlready2.temp_classes import OWLReasoner_Owlready2_TempClasses
+    from owlapy.fast_instance_checker import OWLReasoner_FastInstanceChecker
+    assert isinstance(onto, OWLOntology_Owlready2)
+    base_reasoner = OWLReasoner_Owlready2_TempClasses(ontology=onto)
+    reasoner = OWLReasoner_FastInstanceChecker(ontology=onto,
+                                               base_reasoner=base_reasoner,
+                                               negation_default=True)
+    return reasoner
 
 if __name__ == '__main__':
 
