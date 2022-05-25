@@ -20,9 +20,7 @@ python -c "import ontolearn"
 # Preprocessing 
 Unzip knowledge graphs, embeddings, learning problems and pretrained models.
 ```
-unzip KGs.zip
-unzip embeddings.zip
-unzip LPs.zip
+unzip KGs.zip && unzip embeddings.zip && unzip LPs.zip && unzip pre_trained_agents.zip
 ```
 # Training Deep Reinforcement Learning Agent for Class Expression Learning
 ## Knowledge Graph Embeddings
@@ -46,13 +44,13 @@ python dice-embeddings/main.py --path_dataset_folder "KGs/Family" --storage_path
 ## Train DRILL
 To train DRILL, we need to provide the path of a knowledgebase (KGs/Biopax/biopax.owl) and embeddings
 ```
-python drill_train.py --path_knowledge_base "KGs/Family/family-benchmark_rich_background.owl" --path_knowledge_base_embeddings "KGE_Embeddings/2022-05-24 15:13:49.146848/ConEx_entity_embeddings.csv" --num_episode 2 --min_num_concepts 2 --num_of_randomly_created_problems_per_concept 1 --relearn_ratio 2
+python drill_train.py --path_knowledge_base "KGs/Family/family-benchmark_rich_background.owl" --path_knowledge_base_embeddings "KGE_Embeddings/2022-05-25 14:22:34.353957/ConEx_entity_embeddings.csv" --num_episode 2 --min_num_concepts 2 --num_of_randomly_created_problems_per_concept 1 --relearn_ratio 2
 ```
 
 ### Run an endpoint for DRILL
 To use the endpoint for a pretrained agent, provide the path of the knowledge base as well as the pretrained agent.
 ```
-python flask_end_point.py --pretrained_drill_avg_path "Log/20220524_151428_041754/DrillHeuristic_averaging.pth" --path_knowledge_base "KGs/Family/family-benchmark_rich_background.owl" --path_knowledge_base_embeddings "KGE_Embeddings/2022-05-24 15:13:49.146848/ConEx_entity_embeddings.csv"
+python flask_end_point.py --pretrained_drill_avg_path "Log/20220525_142307_565226/DrillHeuristic_averaging.pth" --path_knowledge_base "KGs/Family/family-benchmark_rich_background.owl" --path_knowledge_base_embeddings "KGE_Embeddings/2022-05-25 14:22:34.353957/ConEx_entity_embeddings.csv"
 ```
 ### Standard Class Expression Learning
 ```
@@ -79,6 +77,7 @@ curl -X POST http://0.0.0.0:9080/concept_learning -H 'Content-Type: application/
 ### Positive Only Class Expression Learning
 ```
 curl -X POST http://0.0.0.0:9080/concept_learning -H 'Content-Type: application/json' -d '{"positives": ["http://www.benchmark.org/family#F9M149"],"negatives": []}'
+# Note that negatives must be an empty list 
 # Expected output
 <?xml version="1.0"?>
 <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
