@@ -199,6 +199,8 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
 
         self.storage_path, _ = create_experiment_folder()
 
+        self.concepts_to_ignore=set()# temporary solution
+
     def best_hypotheses(self, n=1) -> Iterable:
         assert self.search_tree is not None
         assert len(self.search_tree) > 1
@@ -290,6 +292,7 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
 
         # To obtain random negative examples.
         if len(neg) == 0:
+            logger.info('Randomly sample negative individuals')
             neg = set(random.sample([i for i in self.kb.individuals()], len(pos)))
         if max_runtime:
             assert isinstance(max_runtime, int)
@@ -305,6 +308,9 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
             most_promising = self.next_node_to_expand(i)
             next_possible_states = []
             for ref in self.apply_refinement(most_promising):
+                if ref.concept in self.concepts_to_ignore:
+                    logger.info('Ignore')
+                    continue
                 if len(ref.instances):
                     # Compute quality
                     self.compute_quality_of_class_expression(ref)
@@ -357,7 +363,7 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
                 logger.info(f'TARGET OWL CLASS EXPRESSION:\n{target_ce}')
                 logger.info(f'|Sampled Positive|:{len(p)}\t|Sampled Negative|:{len(n)}')
             start_time = time.time()
-            self.fit(pos=p, neg=set(), max_runtime=max_runtime)
+            self.fit(pos=p, neg=n, max_runtime=max_runtime)
             rn = time.time() - start_time
             h: RL_State = next(iter(self.best_hypotheses()))
             # TODO:CD: We need to remove this first returned boolean for the sake of readability.
@@ -815,11 +821,17 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
         """
         if self.verbose > 0:
             logger.info(f'Training starts.\nNumber of learning problem:{len(dataset)},\t Relearn ratio:{relearn_ratio}')
+
+        print('Shuffle the training data')
+        logger.info('Shuffle the training data')
+        random.shuffle(dataset)
+
         counter = 1
         renderer = DLSyntaxObjectRenderer()
 
-        # 1.
+        # (1) Reiterate learning problems if it is required.
         for _ in range(relearn_ratio):
+            # (2) Iterate over learning problems.
             for (target_owl_ce, positives, negatives) in dataset:
 
                 if self.verbose > 0:
@@ -827,9 +839,11 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
                         'Goal Concept:{0}\tE^+:[{1}] \t E^-:[{2}]'.format(target_owl_ce,
                                                                           len(positives), len(negatives)))
                     logger.info(f'RL training on {counter}.th learning problem starts')
-
-                goal_path = list(reversed(self.retrieve_concept_chain(target_owl_ce)))
+                # (2.1) The goal illustration technique is applied to generate goal experience,e.g.,
                 # goal_path: [⊤, Daughter, Daughter ⊓ Mother]
+                goal_path = list(reversed(self.retrieve_concept_chain(target_owl_ce)))
+                logger.info(f'RL training on {counter}.th learning problem starts')
+
                 sum_of_rewards_per_actions = self.rl_learning_loop(pos_uri=positives, neg_uri=negatives,
                                                                    goal_path=goal_path)
 

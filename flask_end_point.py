@@ -11,7 +11,6 @@ from functools import wraps, update_wrapper
 from flask import Flask, request, Response, abort
 from flask import make_response
 
-
 import ontolearn
 from core.model import Drill
 from ontolearn.refinement_operators import LengthBasedRefinement
@@ -22,9 +21,12 @@ from ontolearn.knowledge_base import KnowledgeBase
 from owlapy.model import OWLOntology, OWLReasoner
 from owlapy.model import OWLNamedIndividual
 from owlapy.model import IRI
-
+from owlapy.owlready2 import OWLOntology_Owlready2
+from owlapy.owlready2.temp_classes import OWLReasoner_Owlready2_TempClasses
+from owlapy.fast_instance_checker import OWLReasoner_FastInstanceChecker
 
 import logging
+
 setup_logging()
 logger = logging.getLogger(__name__)
 
@@ -35,6 +37,7 @@ args = None
 lock = threading.Lock()
 loading: bool = False
 ready: bool = False
+
 
 def nocache(view):
     @wraps(view)
@@ -47,6 +50,21 @@ def nocache(view):
         return response
 
     return update_wrapper(no_cache, view)
+
+
+def sanity_checking(learning_problem, app):
+    if "positives" not in learning_problem:
+        app.logger.debug('positives key does not exist in the input. Exit!')
+        exit(1)
+    if "negatives" not in learning_problem:
+        app.logger.debug('negatives key does not exist in the input. Exit!')
+        exit(1)
+
+    # TODO: Sanity checking
+    # TODO: Whether each input can be mapped into OWLNamedIndividual and such owl individual exist in the input KG
+    # TODO: Whether given concepts to be ignored are valid concepts
+
+
 def create_flask_app():
     app = Flask(__name__, instance_relative_config=True, )
 
@@ -67,12 +85,24 @@ def create_flask_app():
             ready = False
             learning_problem = request.get_json(force=True)
             app.logger.debug(learning_problem)
+
+            sanity_checking(learning_problem, app)
+
             no_of_hypotheses = request.form.get("no_of_hypotheses", 1, type=int)
             try:
                 typed_pos = set(map(OWLNamedIndividual, map(IRI.create, set(learning_problem["positives"]))))
                 typed_neg = set(map(OWLNamedIndividual, map(IRI.create, set(learning_problem["negatives"]))))
-                drill.fit(typed_pos, typed_neg,
-                          max_runtime=args.max_test_time_per_concept)
+
+                if "ignore_concepts" in learning_problem:
+                    concepts_to_ignore = set(
+                        filter(lambda _: _.get_iri().get_remainder() in learning_problem["ignore_concepts"],
+                               kb.ontology().classes_in_signature()))
+                    if len(concepts_to_ignore) > 0:
+                        # TODO: Do not ask me why we have this ignore_and_copy() :(
+                        kb = kb.ignore_and_copy(ignored_classes=concepts_to_ignore)
+                        drill.knowledge_base = kb
+                        drill.concepts_to_ignore = concepts_to_ignore
+                drill.fit(typed_pos, typed_neg, max_runtime=args.max_test_time_per_concept)
             except Exception as e:
                 app.logger.debug(e)
                 abort(400)
@@ -81,8 +111,8 @@ def create_flask_app():
                 drill.save_best_hypothesis(no_of_hypotheses, tmp.name)
             except Exception as ex:
                 print(ex)
-            hypotheses_ser = io.open(tmp.name+'.owl', mode="r", encoding="utf-8").read()
-            Path(tmp.name+'.owl').unlink(True)
+            hypotheses_ser = io.open(tmp.name + '.owl', mode="r", encoding="utf-8").read()
+            Path(tmp.name + '.owl').unlink(True)
             return Response(hypotheses_ser, mimetype="application/rdf+xml")
         finally:
             ready = True
@@ -113,10 +143,8 @@ def create_flask_app():
 
     return app
 
+
 def ClosedWorld_ReasonerFactory(onto: OWLOntology) -> OWLReasoner:
-    from owlapy.owlready2 import OWLOntology_Owlready2
-    from owlapy.owlready2.temp_classes import OWLReasoner_Owlready2_TempClasses
-    from owlapy.fast_instance_checker import OWLReasoner_FastInstanceChecker
     assert isinstance(onto, OWLOntology_Owlready2)
     base_reasoner = OWLReasoner_Owlready2_TempClasses(ontology=onto)
     reasoner = OWLReasoner_FastInstanceChecker(ontology=onto,
@@ -124,8 +152,8 @@ def ClosedWorld_ReasonerFactory(onto: OWLOntology) -> OWLReasoner:
                                                negation_default=True)
     return reasoner
 
-if __name__ == '__main__':
 
+if __name__ == '__main__':
     parser = ArgumentParser()
     # General
     parser.add_argument("--path_knowledge_base", type=str, default='KGs/Biopax/biopax.owl')

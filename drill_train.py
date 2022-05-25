@@ -114,7 +114,6 @@ class Trainer:
     def start(self):
         # 1. Parse KG.
         kb = KnowledgeBase(path=self.args.path_knowledge_base, reasoner_factory=ClosedWorld_ReasonerFactory)
-
         min_num_instances = self.args.min_num_instances_ratio_per_concept * kb.individuals_count()
         max_num_instances = self.args.max_num_instances_ratio_per_concept * kb.individuals_count()
 

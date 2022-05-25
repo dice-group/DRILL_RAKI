@@ -103,7 +103,31 @@ curl -X POST http://0.0.0.0:9080/concept_learning -H 'Content-Type: application/
 </rdf:RDF>
 ```
 ## Prior Knowledge Injection
-TODO: Add "ignore_concepts": ["Male","Father","Son","Brother","Grandfather","Grandson"]
+```
+curl -X POST http://0.0.0.0:9080/concept_learning -H 'Content-Type: application/json' -d '{"positives": ["http://www.benchmark.org/family#F9M149"],"negatives": [ "http://www.benchmark.org/family#F9F169"],"ignore_concepts":["Male"]}'
+# Expected output
+<?xml version="1.0"?>
+<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+         xmlns:xsd="http://www.w3.org/2001/XMLSchema#"
+         xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
+         xmlns:owl="http://www.w3.org/2002/07/owl#"
+         xml:base="https://dice-research.org/predictions/1653486547.9595325"
+         xmlns="https://dice-research.org/predictions/1653486547.9595325#">
+
+<owl:Ontology rdf:about="https://dice-research.org/predictions/1653486547.9595325">
+  <owl:imports rdf:resource="file://KGs/Family/family-benchmark_rich_background.owl"/>
+</owl:Ontology>
+<owl:AnnotationProperty rdf:about="#f1_score"/>
+<owl:Class rdf:about="#Pred_0">
+  <owl:equivalentClass>
+    <owl:Class>
+      <owl:complementOf rdf:resource="http://www.benchmark.org/family#Female"/>
+    </owl:Class>
+  </owl:equivalentClass>
+  <f1_score rdf:datatype="http://www.w3.org/2001/XMLSchema#decimal">1.0</f1_score>
+</owl:Class>
+</rdf:RDF>
+```
 
 
 ## How to cite
