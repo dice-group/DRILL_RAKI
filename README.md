@@ -128,7 +128,15 @@ curl -X POST http://0.0.0.0:9080/concept_learning -H 'Content-Type: application/
 </owl:Class>
 </rdf:RDF>
 ```
-
+### Prepare DL-Learner
+Download DL-Learner.
+```
+# Download DL-Learner
+wget --no-check-certificate --content-disposition https://github.com/SmartDataAnalytics/DL-Learner/releases/download/1.4.0/dllearner-1.4.0.zip
+unzip dllearner-1.4.0.zip
+# Test the DL-learner framework
+dllearner-1.4.0/bin/cli dllearner-1.4.0/examples/father.conf
+```
 
 ## How to cite
 ```

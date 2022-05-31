@@ -20,14 +20,16 @@ import ontolearn
 from core import helper_classes
 from core.model import Drill
 from core.static_funcs import ClosedWorld_ReasonerFactory
+from core.binder import DLLearnerBinder
+from core.helper_classes import Experiments
 from ontolearn.knowledge_base import KnowledgeBase
 from ontolearn.learning_problem_generator import LearningProblemGenerator
 from ontolearn.refinement_operators import LengthBasedRefinement, ModifiedCELOERefinement
 from ontolearn.metrics import Accuracy, F1
 
 import random
-from ontolearn.experiments import Experiments
-from ontolearn.binders import DLLearnerBinder
+# from ontolearn.experiments import Experiments
+# from ontolearn.binders import DLLearnerBinder
 import pandas as pd
 from argparse import ArgumentParser
 import os
@@ -92,16 +94,15 @@ def remedy_lps_wo_negatives(kb, problems):
 
 
 def start(args):
+    # (1) Load KB into memory.
     kb = KnowledgeBase(path=args.path_knowledge_base, reasoner_factory=ClosedWorld_ReasonerFactory)
-
+    # (2) Load learning problems into memory
     problems = learning_problem_parser_from_json(args.path_lp)
-    # Remedy empty negatives
+    # (3) Remedy empty negatives by constructing negative example set from randomly sampled individuals.
     problems = remedy_lps_wo_negatives(kb, problems)
-
     print(f'Number of problems {len(problems)} on {kb}')
-
     models = []
-    # Initialize models
+    # (4) Initialize models
     if args.path_dl_learner:
         models.append(
             DLLearnerBinder(binary_path=args.path_dl_learner, kb_path=args.path_knowledge_base, model='celoe'))
@@ -112,7 +113,6 @@ def start(args):
                   quality_func=F1(), batch_size=args.batch_size, num_workers=args.num_workers,
                   pretrained_model_path=args.pretrained_drill_avg_path, verbose=args.verbose,
                   num_of_sequential_actions=args.num_of_sequential_actions)
-
     drill.name += '_ModifiedCELOERefinement'
     models.append(drill)
     models.append(Drill(knowledge_base=kb, path_of_embeddings=args.path_knowledge_base_embeddings,
@@ -124,9 +124,7 @@ def start(args):
     time_kg_processing = time.time() - full_computation_time
     print(f'KG preprocessing took : {time_kg_processing}')
     drill.time_kg_processing = time_kg_processing
-
-    problems = [(i['target_concept'], i['positive_examples'], i['negative_examples']) for i in problems]
-    Experiments(max_test_time_per_concept=args.max_test_time_per_concept).start(dataset=problems,models=models)
+    Experiments(max_test_time_per_concept=args.max_test_time_per_concept).start(dataset=problems, models=models)
 
 
 if __name__ == '__main__':

@@ -8,6 +8,8 @@ from ontolearn.search import EvoLearnerNode, HeuristicOrderedNode, OENode, TreeN
     QualityOrderedNode, RL_State, DRILLSearchTreePriorityQueue
 
 from owlapy.model import OWLClassExpression, OWLDataProperty, OWLLiteral, OWLNamedIndividual
+from owlapy.model import OWLNamedIndividual
+from owlapy.model import IRI
 import ontolearn
 import torch
 from torch import nn
@@ -351,6 +353,7 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
         """
         dataset is a list of tuples where the first item is either str or OWL class expression indicating target concept
         """
+
         if max_runtime:
             assert isinstance(max_runtime, int)
             assert max_runtime > 0
@@ -358,19 +361,25 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
         renderer = DLSyntaxObjectRenderer()
 
         results = []
-        for (target_ce, p, n) in dataset:
+        for d in dataset:
+
+            target_concept,positive_examples,negative_examples,ignore_concepts=d['target_concept'],d['positive_examples'],d['negative_examples'],d['ignore_concepts']
+
+            typed_p = {OWLNamedIndividual(IRI.create(i)) for i in positive_examples}
+            typed_n = {OWLNamedIndividual(IRI.create(i)) for i in negative_examples}
+
             if self.verbose > 0:
-                logger.info(f'TARGET OWL CLASS EXPRESSION:\n{target_ce}')
-                logger.info(f'|Sampled Positive|:{len(p)}\t|Sampled Negative|:{len(n)}')
+                logger.info(f'TARGET OWL CLASS EXPRESSION:\n{target_concept}')
+                logger.info(f'|Sampled Positive|:{len(typed_p)}\t|Sampled Negative|:{len(typed_n)}')
             start_time = time.time()
-            self.fit(pos=p, neg=n, max_runtime=max_runtime)
+            self.fit(pos=typed_p, neg=typed_n, max_runtime=max_runtime)
             rn = time.time() - start_time
             h: RL_State = next(iter(self.best_hypotheses()))
             # TODO:CD: We need to remove this first returned boolean for the sake of readability.
             _, f_measure = F1().score_elp(instances=h.instances_bitset, learning_problem=self._learning_problem)
             _, accuracy = Accuracy().score_elp(instances=h.instances_bitset, learning_problem=self._learning_problem)
 
-            report = {'Target': str(target_ce),
+            report = {'Target': target_concept,
                       'Prediction': renderer.render(h.concept),
                       'F-measure': f_measure,
                       'Accuracy': accuracy,
