@@ -23,7 +23,7 @@ Unzip knowledge graphs, embeddings, learning problems and pretrained models.
 unzip KGs.zip && unzip embeddings.zip && unzip LPs.zip && unzip pre_trained_agents.zip
 ```
 # Training Deep Reinforcement Learning Agent for Class Expression Learning
-## Knowledge Graph Embeddings
+## (1) Knowledge Graph Embeddings
 #### Install dice-embeddings framework
 Install our framework to learn vector representations for knowledge graphs
 ```
@@ -41,7 +41,7 @@ Executing the following command results in creating a folder (KGE_Embeddings) co
 ```
 python dice-embeddings/main.py --path_dataset_folder "KGs/Family" --storage_path "KGE_Embeddings" --model "ConEx"
 ```
-## Train DRILL
+## (2) Training via Deep Reinforcement Learning
 To train DRILL, we need to provide the path of a knowledgebase (KGs/Biopax/biopax.owl) and embeddings
 ```
 python drill_train.py --path_knowledge_base "KGs/Family/family-benchmark_rich_background.owl" --path_knowledge_base_embeddings "KGE_Embeddings/2022-05-25 14:22:34.353957/ConEx_entity_embeddings.csv" --num_episode 2 --min_num_concepts 2 --num_of_randomly_created_problems_per_concept 1 --relearn_ratio 2
@@ -128,6 +128,8 @@ curl -X POST http://0.0.0.0:9080/concept_learning -H 'Content-Type: application/
 </owl:Class>
 </rdf:RDF>
 ```
+
+### Comparing DRILL against State-of-the-art
 ### Prepare DL-Learner
 Download DL-Learner.
 ```
@@ -136,6 +138,45 @@ wget --no-check-certificate --content-disposition https://github.com/SmartDataAn
 unzip dllearner-1.4.0.zip
 # Test the DL-learner framework
 dllearner-1.4.0/bin/cli dllearner-1.4.0/examples/father.conf
+```
+To ease the reproducibility of our experiments, we prove scripts for training and testing.
+- ``` sh reproduce_small_benchmark.sh ``` reproduces results on benchmark learning.
+- ``` sh reproduce_large_benchmark.sh ``` reproduces results on 370 benchmark learning.
+- ``` drill_train.py``` allows to train DRILL on any desired learning problem.
+
+## Supervised Learning, Prior Knowledge Injection and Positive Only Learning
+
+### Supervised Learning
+Consider the following json file storing a learning problem.
+```sh
+{ "problems": { "Aunt": { "positive_examples": [...], "negative_examples": [...] } } }
+```
+A classification report of DRILL will be stored in a json file as shown below
+```sh
+{
+   "0": {
+      "TargetConcept": "Aunt",
+      "Target": "Aunt",
+      "Prediction": "Female",
+      "TopPredictions": [["Female","Quality:0.804"],["\u00acMale","Quality:0.804"], ... ],
+      "F-measure": 0.804,
+      "Accuracy": 0.756,
+      "NumClassTested": 6117,
+      "Runtime": 3.53,
+      "positive_examples": [...],
+      "negative_examples": [...]
+   },
+```
+### Supervised Learning with Prior Knowledge Injection
+Currently, we are exploring the idea of injecting prior knowledge into DRILL.
+```sh
+{ "problems": { "Aunt": { "positive_examples": [...], "negative_examples": [...],"ignore_concepts": ["Male","Father","Son","Brother","Grandfather","Grandson"] } } }
+```
+A class expression report will be obtained while ignoring any expression related to "ignore_concepts"
+### From Supervised Learning to Positive Only Learning
+Currently, we are exploring the idea of applying a pretrained DRILL that is trained for Supervised Learning in positive only learning.
+```sh
+{ "problems": { "Aunt": { "positive_examples": [...], "negative_examples": [] # Empty list} } }
 ```
 
 ## How to cite

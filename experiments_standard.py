@@ -86,10 +86,12 @@ def learning_problem_parser_from_json(path) -> List:
 
 
 def remedy_lps_wo_negatives(kb, problems):
+    all_individuals_str= {i.get_iri().as_str() for i in kb.all_individuals_set()}
+
     for ith, lp_dict in enumerate(problems):
         if len(lp_dict['negative_examples']) == 0:
             print(f'{ith} learning problem without negatives is remedied.')
-            lp_dict['negative_examples'] = kb.individuals.difference(lp_dict['positive_examples'])
+            lp_dict['negative_examples'] = all_individuals_str.difference(lp_dict['positive_examples'])
     return problems
 
 

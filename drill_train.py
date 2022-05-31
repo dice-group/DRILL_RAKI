@@ -26,6 +26,7 @@ from core.model import Drill
 from ontolearn.knowledge_base import KnowledgeBase
 from ontolearn.learning_problem_generator import LearningProblemGenerator
 from ontolearn.refinement_operators import LengthBasedRefinement, ModifiedCELOERefinement
+from owlapy.render import DLSyntaxObjectRenderer
 
 import os
 import json
@@ -54,7 +55,6 @@ from torch import nn
 from torch.functional import F
 from torch.nn.init import xavier_normal_
 from deap import gp, tools, base, creator
-
 
 from ontolearn.core.owl.utils import EvaluatedDescriptionSet, ConceptOperandSorter, OperandSetTransform
 from ontolearn.data_struct import PrepareBatchOfTraining, PrepareBatchOfPrediction
@@ -97,9 +97,7 @@ np.random.seed(random_seed)
 
 class Trainer:
     def __init__(self, args):
-        # sanity_checking_args(args)
         self.args = args
-
     def save_config(self, path):
         with open(path + '/configuration.json', 'w') as file_descriptor:
             temp = vars(self.args)
@@ -108,6 +106,7 @@ class Trainer:
     def start(self):
         # 1. Parse KG.
         kb = KnowledgeBase(path=self.args.path_knowledge_base, reasoner_factory=ClosedWorld_ReasonerFactory)
+
         min_num_instances = self.args.min_num_instances_ratio_per_concept * kb.individuals_count()
         max_num_instances = self.args.max_num_instances_ratio_per_concept * kb.individuals_count()
 
@@ -138,14 +137,19 @@ class Trainer:
 
         drill.train(balanced_examples)
         drill.save_weights()
+        renderer=DLSyntaxObjectRenderer()
+        test_data = [
+            {'target_concept': renderer.render(rl_state.concept), 'positive_examples': {i.get_iri().as_str() for i in typed_p},
+             'negative_examples': {i.get_iri().as_str() for i in typed_n}, 'ignore_concepts': set()} for
+            rl_state, typed_p, typed_n in balanced_examples]
         for result_dict, learning_problem in zip(
-                drill.fit_from_iterable(balanced_examples, max_runtime=self.args.max_test_time_per_concept),
-                balanced_examples):
-            target_class_expression, sampled_positive_examples, sampled_negative_examples = learning_problem
-            print(f'\nTarget Class Expression:{target_class_expression}')
-            print(f'| sampled E^+|:{len(sampled_positive_examples)}\t| sampled E^-|:{len(sampled_negative_examples)}')
+                drill.fit_from_iterable(test_data, max_runtime=self.args.max_test_time_per_concept),
+                test_data):
+            print(f'\nTarget Class Expression:{learning_problem["target_concept"]}')
+            print(f'| sampled E^+|:{len(learning_problem["positive_examples"])}\t| sampled E^-|:{len(learning_problem["negative_examples"])}')
             for k, v in result_dict.items():
                 print(f'{k}:{v}')
+
 
 if __name__ == '__main__':
     parser = ArgumentParser()
