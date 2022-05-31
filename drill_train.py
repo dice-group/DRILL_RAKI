@@ -25,9 +25,8 @@ from core import helper_classes
 from core.model import Drill
 from ontolearn.knowledge_base import KnowledgeBase
 from ontolearn.learning_problem_generator import LearningProblemGenerator
-from ontolearn.refinement_operators import LengthBasedRefinement
-#from ontolearn import KnowledgeBase, LearningProblemGenerator#, DrillAverage, DrillProbabilistic
-#from ontolearn.util import sanity_checking_args
+from ontolearn.refinement_operators import LengthBasedRefinement, ModifiedCELOERefinement
+
 import os
 import json
 
@@ -35,10 +34,7 @@ import random
 import torch
 import numpy as np
 
-
 from argparse import ArgumentParser
-from ontolearn.knowledge_base import KnowledgeBase
-from ontolearn.learning_problem_generator import LearningProblemGenerator
 from ontolearn.metrics import F1
 from ontolearn.heuristics import Reward
 from owlapy.model import OWLOntology, OWLReasoner
@@ -50,7 +46,6 @@ import random
 import time
 from collections import deque
 from contextlib import contextmanager
-from itertools import islice, chain
 
 from typing import Any, Callable, Dict, FrozenSet, Set, List, Tuple, Iterable, Optional, Generator, SupportsFloat
 
@@ -60,7 +55,6 @@ from torch.functional import F
 from torch.nn.init import xavier_normal_
 from deap import gp, tools, base, creator
 
-from ontolearn.knowledge_base import KnowledgeBase
 
 from ontolearn.core.owl.utils import EvaluatedDescriptionSet, ConceptOperandSorter, OperandSetTransform
 from ontolearn.data_struct import PrepareBatchOfTraining, PrepareBatchOfPrediction
@@ -103,7 +97,7 @@ np.random.seed(random_seed)
 
 class Trainer:
     def __init__(self, args):
-        #sanity_checking_args(args)
+        # sanity_checking_args(args)
         self.args = args
 
     def save_config(self, path):
@@ -130,7 +124,10 @@ class Trainer:
             min_num_problems=self.args.min_num_concepts,
             num_diff_runs=self.args.min_num_concepts // 2)
         drill = Drill(knowledge_base=kb, path_of_embeddings=self.args.path_knowledge_base_embeddings,
-                      refinement_operator=LengthBasedRefinement(knowledge_base=kb), quality_func=F1(),
+                      refinement_operator=ModifiedCELOERefinement(
+                          knowledge_base=kb) if self.args.refinement_operator == 'ModifiedCELOERefinement' else LengthBasedRefinement(
+                          knowledge_base=kb),
+                      quality_func=F1(),
                       reward_func=Reward(),
                       batch_size=self.args.batch_size, num_workers=self.args.num_workers,
                       pretrained_model_path=self.args.pretrained_drill_avg_path, verbose=self.args.verbose,
@@ -166,6 +163,8 @@ if __name__ == '__main__':
     parser.add_argument("--min_num_instances_ratio_per_concept", type=float, default=.01)  # %1
     parser.add_argument("--max_num_instances_ratio_per_concept", type=float, default=.60)  # %30
     parser.add_argument("--num_of_randomly_created_problems_per_concept", type=int, default=1)
+    parser.add_argument("--refinement_operator", type=str, default='LengthBasedRefinement',
+                        choices=['ModifiedCELOERefinement', 'LengthBasedRefinement'])
 
     # DQL related
     parser.add_argument("--gamma", type=float, default=.99, help='The discounting rate')

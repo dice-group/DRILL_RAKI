@@ -199,7 +199,7 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
 
         self.storage_path, _ = create_experiment_folder()
 
-        self.concepts_to_ignore=set()# temporary solution
+        self.concepts_to_ignore = set()  # temporary solution
 
     def best_hypotheses(self, n=1) -> Iterable:
         assert self.search_tree is not None
@@ -441,9 +441,13 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
         3. Return Generator
         """
         assert isinstance(rl_state, RL_State)
-        # 1.
-        for i in self.operator.refine(rl_state.concept):  # O(N)
-            # TODO: CURRENTLY IGNORED the checking not wanted concetpts if i.str not in self.concepts_to_ignore:  # O(1)
+
+        if isinstance(self.operator, ontolearn.refinement_operators.ModifiedCELOERefinement):
+            refinements = self.operator.refine(rl_state.concept, max_length=10)
+        else:
+            refinements = self.operator.refine(rl_state.concept)
+
+        for i in refinements:
             yield self.create_rl_state(i, parent_node=rl_state)
 
     def learn_from_illustration(self, sequence_of_goal_path: List[RL_State]):
