@@ -835,8 +835,8 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
         if self.verbose > 0:
             logger.info(f'Training starts.\nNumber of learning problem:{len(dataset)},\t Relearn ratio:{relearn_ratio}')
 
-        print('Shuffle the training data')
-        logger.info('Shuffle the training data')
+        if self.verbose > 0:
+            logger.info('Shuffle the training data')
         random.shuffle(dataset)
 
         counter = 1

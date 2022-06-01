@@ -3,152 +3,19 @@
 Drill -- Deep Reinforcement Learning for Refinement Operators in ALC
 ====================================================================
 Drill with training.
-Authors: XXX
+Authors: Caglar Demir
 
-This script performs the following computations
+This script performs the following computations via the Trainer Class
 1. Parse KG.
 2. Generate learning problems.
 3. Train DRILL on each learning problems.
-
-
-=> During training, current state of learning process is displayed periodically.
-At the end of the each learning problem, sum of rewards in the first and last three trajectories are shown.
-=> Sum of Rewards in first 3 trajectory:[...]
-=> Sum of Rewards in last 3 trajectory:[...]
-These indicate the learning performance of the agent.
-
-
-=> As a result the training, a file is created containing all relevant information.
 """
-import ontolearn
-from core import helper_classes
-from core.model import Drill
-from ontolearn.knowledge_base import KnowledgeBase
-from ontolearn.learning_problem_generator import LearningProblemGenerator
-from ontolearn.refinement_operators import LengthBasedRefinement, ModifiedCELOERefinement
-from owlapy.render import DLSyntaxObjectRenderer
-
-import os
-import json
-
-import random
-import torch
-import numpy as np
-
-from argparse import ArgumentParser
-from ontolearn.metrics import F1
-from ontolearn.heuristics import Reward
-from owlapy.model import OWLOntology, OWLReasoner
-from ontolearn.utils import setup_logging
-
 import logging
-import operator
-import random
-import time
-from collections import deque
-from contextlib import contextmanager
-
-from typing import Any, Callable, Dict, FrozenSet, Set, List, Tuple, Iterable, Optional, Generator, SupportsFloat
-
-import torch
-from torch import nn
-from torch.functional import F
-from torch.nn.init import xavier_normal_
-from deap import gp, tools, base, creator
-
-from ontolearn.core.owl.utils import EvaluatedDescriptionSet, ConceptOperandSorter, OperandSetTransform
-from ontolearn.data_struct import PrepareBatchOfTraining, PrepareBatchOfPrediction
-from ontolearn.ea_algorithms import AbstractEvolutionaryAlgorithm, EASimple
-from ontolearn.ea_initialization import AbstractEAInitialization, EARandomInitialization, EARandomWalkInitialization
-from ontolearn.ea_utils import PrimitiveFactory, OperatorVocabulary, ToolboxVocabulary, Tree, escape, ind_to_string, \
-    owlliteral_to_primitive_string
-from ontolearn.fitness_functions import LinearPressureFitness
-from ontolearn.heuristics import OCELHeuristic
-from ontolearn.knowledge_base import EvaluatedConcept
-from ontolearn.learning_problem import PosNegLPStandard, EncodedPosNegLPStandard
-from ontolearn.metrics import Accuracy, F1
-
-from ontolearn.utils import oplogging, create_experiment_folder
-from ontolearn.value_splitter import AbstractValueSplitter, BinningValueSplitter, EntropyValueSplitter
-
-from owlapy.render import DLSyntaxObjectRenderer
-from owlapy.util import OrderedOWLObject
-from sortedcontainers import SortedSet
+from argparse import ArgumentParser
+from ontolearn.utils import setup_logging
+from core.trainer import Trainer
 setup_logging()
-
 logger = logging.getLogger(__name__)
-
-def ClosedWorld_ReasonerFactory(onto: OWLOntology) -> OWLReasoner:
-    from owlapy.owlready2 import OWLOntology_Owlready2
-    from owlapy.owlready2.temp_classes import OWLReasoner_Owlready2_TempClasses
-    from owlapy.fast_instance_checker import OWLReasoner_FastInstanceChecker
-    assert isinstance(onto, OWLOntology_Owlready2)
-    base_reasoner = OWLReasoner_Owlready2_TempClasses(ontology=onto)
-    reasoner = OWLReasoner_FastInstanceChecker(ontology=onto,
-                                               base_reasoner=base_reasoner,
-                                               negation_default=True)
-    return reasoner
-
-random_seed = 1
-random.seed(random_seed)
-torch.manual_seed(random_seed)
-np.random.seed(random_seed)
-
-
-class Trainer:
-    def __init__(self, args):
-        self.args = args
-    def save_config(self, path):
-        with open(path + '/configuration.json', 'w') as file_descriptor:
-            temp = vars(self.args)
-            json.dump(temp, file_descriptor)
-
-    def start(self):
-        # 1. Parse KG.
-        kb = KnowledgeBase(path=self.args.path_knowledge_base, reasoner_factory=ClosedWorld_ReasonerFactory)
-
-        min_num_instances = self.args.min_num_instances_ratio_per_concept * kb.individuals_count()
-        max_num_instances = self.args.max_num_instances_ratio_per_concept * kb.individuals_count()
-
-        # 2. Generate Learning Problems.
-        lp = LearningProblemGenerator(knowledge_base=kb,
-                                      min_length=self.args.min_length,
-                                      max_length=self.args.max_length,
-                                      min_num_instances=min_num_instances,
-                                      max_num_instances=max_num_instances)
-        balanced_examples = lp.get_balanced_n_samples_per_examples(
-            n=self.args.num_of_randomly_created_problems_per_concept,
-            min_length=self.args.min_length,
-            max_length=self.args.max_length,
-            min_num_problems=self.args.min_num_concepts,
-            num_diff_runs=self.args.min_num_concepts // 2)
-        drill = Drill(knowledge_base=kb, path_of_embeddings=self.args.path_knowledge_base_embeddings,
-                      refinement_operator=ModifiedCELOERefinement(
-                          knowledge_base=kb) if self.args.refinement_operator == 'ModifiedCELOERefinement' else LengthBasedRefinement(
-                          knowledge_base=kb),
-                      quality_func=F1(),
-                      reward_func=Reward(),
-                      batch_size=self.args.batch_size, num_workers=self.args.num_workers,
-                      pretrained_model_path=self.args.pretrained_drill_avg_path, verbose=self.args.verbose,
-                      max_len_replay_memory=self.args.max_len_replay_memory, epsilon_decay=self.args.epsilon_decay,
-                      num_epochs_per_replay=self.args.num_epochs_per_replay,
-                      num_episodes_per_replay=self.args.num_episodes_per_replay, learning_rate=self.args.learning_rate,
-                      num_of_sequential_actions=self.args.num_of_sequential_actions, num_episode=self.args.num_episode)
-
-        drill.train(balanced_examples)
-        drill.save_weights()
-        renderer=DLSyntaxObjectRenderer()
-        test_data = [
-            {'target_concept': renderer.render(rl_state.concept), 'positive_examples': {i.get_iri().as_str() for i in typed_p},
-             'negative_examples': {i.get_iri().as_str() for i in typed_n}, 'ignore_concepts': set()} for
-            rl_state, typed_p, typed_n in balanced_examples]
-        for result_dict, learning_problem in zip(
-                drill.fit_from_iterable(test_data, max_runtime=self.args.max_test_time_per_concept),
-                test_data):
-            print(f'\nTarget Class Expression:{learning_problem["target_concept"]}')
-            print(f'| sampled E^+|:{len(learning_problem["positive_examples"])}\t| sampled E^-|:{len(learning_problem["negative_examples"])}')
-            for k, v in result_dict.items():
-                print(f'{k}:{v}')
 
 
 if __name__ == '__main__':
@@ -159,7 +26,6 @@ if __name__ == '__main__':
                         default='embeddings/ConEx_Family/ConEx_entity_embeddings.csv')
     parser.add_argument("--verbose", type=int, default=10)
     parser.add_argument('--num_workers', type=int, default=4, help='Number of cpus used during batching')
-
     # Concept Generation Related
     parser.add_argument("--min_num_concepts", type=int, default=1)
     parser.add_argument("--min_length", type=int, default=4, help='Min length of concepts to be used')
