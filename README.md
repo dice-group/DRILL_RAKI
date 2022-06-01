@@ -12,8 +12,6 @@ git clone https://github.com/dice-group/DRILL_RAKI && conda create -n drill_env 
 # Install requirements
 cd DRILL_RAKI && wget --no-check-certificate --content-disposition https://github.com/dice-group/Ontolearn/archive/refs/tags/0.5.1.zip
 unzip Ontolearn-0.5.1.zip && cd Ontolearn-0.5.1 && pip install -e . && cd ..
-# For the Endpoint only
-pip install flask==2.1.2
 # Test the installation. No error should occur.
 python -c "import ontolearn"
 ```
@@ -51,6 +49,37 @@ python drill_train.py --path_knowledge_base "KGs/Family/family-benchmark_rich_ba
 To use the endpoint for a pretrained agent, provide the path of the knowledge base as well as the pretrained agent.
 ```
 python flask_end_point.py --pretrained_drill_avg_path "Log/20220525_142307_565226/DrillHeuristic_averaging.pth" --path_knowledge_base "KGs/Family/family-benchmark_rich_background.owl" --path_knowledge_base_embeddings "KGE_Embeddings/2022-05-25 14:22:34.353957/ConEx_entity_embeddings.csv"
+```
+
+## Docker for using trained DRILL on an endpoint
+```
+# You may want to unzip LPs if you haven't done it earlier
+sudo docker build -t drill:latest "."
+# Successfully tagged drill:latest # if you see **done**, all went well
+sudo docker images # to see installed image
+```
+### Run the docker image.
+```
+sudo docker run \
+-e KG=Biopax/biopax.owl \
+-e EMBEDDINGS=ConEx_Biopax/ConEx_entity_embeddings.csv \
+-e PRE_TRAINED_AGENT=Biopax/DrillHeuristic_averaging/DrillHeuristic_averaging.pth \
+drill:latest
+```
+### How to use the endpoint
+```
+# (1) Open a new terminal (Ctrl+Alt+T on ubuntu) to verify the endpoint.
+curl http://172.17.0.2:9080/status
+{"status":"ready"} # If you see this  all went well :)
+# (2) Use an example learning problem
+jq '
+   .problems
+     ."((pathwayStep ⊓ (∀INTERACTION-TYPE.Thing)) ⊔ (sequenceInterval ⊓ (∀ID-VERSION.Thing)))"
+   | {
+      "positives": .positive_examples,
+      "negatives": .negative_examples
+     }' LPs/Biopax/lp.json \
+| curl -d@- http://172.17.0.2:9080/concept_learning
 ```
 ### Standard Class Expression Learning
 ```
