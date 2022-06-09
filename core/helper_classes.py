@@ -6,6 +6,14 @@ import time
 from random import shuffle
 import pandas as pd
 
+from .static_funcs import ClosedWorld_ReasonerFactory
+from ontolearn.knowledge_base import KnowledgeBase
+from ontolearn.learning_problem_generator import LearningProblemGenerator
+from owlapy.model import OWLOntologyManager, OWLOntology, AddImport, OWLImportsDeclaration, \
+    OWLClass, OWLEquivalentClassesAxiom, IRI, OWLNamedIndividual, OWLAnnotationAssertionAxiom, OWLAnnotation, \
+    OWLAnnotationProperty, OWLLiteral
+from ontolearn.search import RL_State
+from owlapy.owlready2 import OWLOntologyManager_Owlready2
 
 class Experiments:
     def __init__(self, max_test_time_per_concept=3):
@@ -34,7 +42,7 @@ class Experiments:
             report = dict()
             # lp: {'target_concept':'..','positive_examples':set(),
             # 'negative_examples':set(),'ignore_concepts':set()}
-            report['TargetConcept']=lp['target_concept']
+            report['TargetConcept'] = lp['target_concept']
             """            
             # lp is a list
             # where lp[0] target node object or string
@@ -47,7 +55,8 @@ class Experiments:
                 print(f'Target => {report["TargetConcept"]}')
             """
             report.update(pred)
-            report['positive_examples'], report['negative_examples'] = list(lp['positive_examples']), list(lp['negative_examples'])  # 'set' is not JSON serializable.
+            report['positive_examples'], report['negative_examples'] = list(lp['positive_examples']), list(
+                lp['negative_examples'])  # 'set' is not JSON serializable.
             store_json[th] = report
         print('##################')
         # json serialize
@@ -126,7 +135,8 @@ class Experiments:
         counter = 1
         # (1) Iteratively fit learning models into a given set of learning problems
         for m in models:
-            print(f'{m.name} starts on {len(dataset)} number of problems. Max Runtime per problem is set to {self.max_test_time_per_concept} seconds.')
+            print(
+                f'{m.name} starts on {len(dataset)} number of problems. Max Runtime per problem is set to {self.max_test_time_per_concept} seconds.')
             # Each item=>{'Prediction': 'Brother ⊔ (Male ⊓ (¬Son))', 'Accuracy': 0.8947, 'F-measure': 0.9048, 'NumClassTested': 4342, 'Runtime': 5.839}
             test_report: List[dict] = m.fit_from_iterable(dataset, max_runtime=self.max_test_time_per_concept)
             str_report, dict_report = self.store_report(m, dataset, test_report)
@@ -148,3 +158,54 @@ class Experiments:
 
             print(
                 f'{learner_name}\t F-measure:(avg. {f1_mean:.2f} | std. {f1_std:.2f})\tAccuracy:(avg. {acc_mean:.2f} | std. {acc_std:.2f})\t\tNumClassTested:(avg. {num_concept_tested_mean:.2f} | std. {num_concept_tested_std:.2f})\t\tRuntime:(avg.{runtime_mean:.2f} | std.{runtime_std:.2f})')
+
+class MyLearningProblemGenerator(LearningProblemGenerator):
+    def __init__(self, *args, **kwargs):
+        super(MyLearningProblemGenerator, self).__init__(*args, **kwargs)
+
+    def export_concepts(self, concepts: list, path: str):
+        assert isinstance(concepts, list)
+        SNS: Final = 'https://dice-research.org/predictions-schema/'
+        NS: Final = 'https://dice-research.org/predictions/' + str(time.time()) + '#'
+        # NS: Final = 'https://dice-research.org/problems/' + str(time.time()) + '#'
+
+        assert isinstance(self.kb, KnowledgeBase)
+
+        manager: OWLOntologyManager = OWLOntologyManager_Owlready2()
+
+        ontology: OWLOntology = manager.create_ontology(IRI.create(NS))
+        manager.load_ontology(IRI.create(self.kb.path))
+        kb_iri = self.kb.ontology().get_ontology_id().get_ontology_iri()
+        manager.apply_change(AddImport(ontology, OWLImportsDeclaration(kb_iri)))
+        for ith, h in enumerate(concepts):
+            cls_a: OWLClass = OWLClass(IRI.create(NS, "Pred_" + str(ith)))
+            equivalent_classes_axiom = OWLEquivalentClassesAxiom(cls_a, h.concept)
+            manager.add_axiom(ontology, equivalent_classes_axiom)
+
+            count = None
+            try:
+                count = h.individuals_count
+            except AttributeError:
+                if isinstance(h, RL_State):
+                    inst = h.instances
+                    if inst is not None:
+                        count = len(inst)
+
+            if count is not None:
+                num_inds = OWLAnnotationAssertionAxiom(cls_a.get_iri(), OWLAnnotation(
+                    OWLAnnotationProperty(IRI.create(SNS, "covered_inds")), OWLLiteral(count)))
+                manager.add_axiom(ontology, num_inds)
+
+        manager.save_ontology(ontology, IRI.create('file:/' + path + '.owl'))
+
+
+class ExpressionGenerator:
+    def __init__(self, args):
+        kb = KnowledgeBase(path=args.path_knowledge_base, reasoner_factory=ClosedWorld_ReasonerFactory)
+        lp = MyLearningProblemGenerator(knowledge_base=kb)
+        concepts = list(lp.get_concepts(num_problems=args.num_problems,
+                                        num_diff_runs=args.num_diff_runs,
+                                        min_num_instances=args.min_num_instances,
+                                        max_num_instances=args.max_num_instances,
+                                        min_length=args.min_length, max_length=args.max_length))
+        lp.export_concepts(concepts, path=args.path_to_store)
