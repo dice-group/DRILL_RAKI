@@ -18,7 +18,12 @@ python -c "import ontolearn"
 # Preprocessing 
 Unzip knowledge graphs, embeddings, learning problems and pretrained models.
 ```
+# (1) Unzip files
 unzip KGs.zip && unzip embeddings.zip && unzip LPs.zip && unzip pre_trained_agents.zip
+# (2) Run a webservice to use a pretrained DRILL
+python flask_end_point.py --pretrained_drill_avg_path "pre_trained_agents/Family/DrillHeuristic_averaging/DrillHeuristic_averaging.pth" --path_knowledge_base "KGs/Family/family-benchmark_rich_background.owl" --path_knowledge_base_embeddings "embeddings/ConEx_Family/ConEx_entity_embeddings.csv"
+# (3) Send the following learning problem
+curl -X POST http://0.0.0.0:9080/concept_learning -H 'Content-Type: application/json' -d '{"positives": ["http://www.benchmark.org/family#F9M149"],"negatives": [ "http://www.benchmark.org/family#F9F169"]}'
 ```
 # Training Deep Reinforcement Learning Agent for Class Expression Learning
 ## (1) Knowledge Graph Embeddings
