@@ -320,6 +320,9 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
                     next_possible_states.append(ref)
                     if ref.quality == 1:
                         break
+                if time.time() - self.start_time > self.max_runtime:
+                    logger.info('Timeout reached in apply_refinement loop')
+                    break
             logger.info('Next possible states: %i', len(next_possible_states))
             try:
                 assert len(next_possible_states) > 0
