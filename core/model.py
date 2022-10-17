@@ -309,9 +309,10 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
         for i in range(1, self.iter_bound):
             most_promising = self.next_node_to_expand(i)
             next_possible_states = []
+            logger.info('Iteration: %i, most promising: %s', i, most_promising)
             for ref in self.apply_refinement(most_promising):
                 if ref.concept in self.concepts_to_ignore:
-                    logger.info('Ignore')
+                    logger.info('Ignoring: %s', ref.concept)
                     continue
                 if len(ref.instances):
                     # Compute quality
@@ -321,6 +322,10 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
                     next_possible_states.append(ref)
                     if ref.quality == 1:
                         break
+                if time.time() - self.start_time > self.max_runtime:
+                    logger.info('Timeout reached in apply_refinement loop')
+                    break
+            logger.info('Next possible states: %i', len(next_possible_states))
             try:
                 assert len(next_possible_states) > 0
             except AssertionError:
@@ -331,14 +336,20 @@ class Drill(AbstractDrill, RefinementBasedConceptLearner):
             if len(next_possible_states) == 0:
                 # We do not need to compute Q value based on embeddings of "zeros".
                 continue
+            logger.info('Predicting Q...')
             predicted_Q_values = self.predict_Q(current_state=most_promising, next_states=next_possible_states)
+            logger.info('Update search...')
             self.goal_found = self.update_search(next_possible_states, predicted_Q_values)
+            logger.info('Iteration %i done', i)
             if self.goal_found:
+                logger.info('Goal found')
                 if self.terminate_on_goal:
                     return self.terminate()
             if time.time() - self.start_time > self.max_runtime:
+                logger.info('Timeout reached')
                 return self.terminate()
             if self.number_of_tested_concepts >= self.max_num_of_concepts_tested:
+                logger.info('Reached max num of concepts to test: %i', self.max_num_of_concepts_tested)
                 return self.terminate()
 
     def show_search_tree(self, heading_step: str, top_n: int = 10) -> None:
