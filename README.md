@@ -30,7 +30,10 @@ curl -X POST http://0.0.0.0:9080/concept_learning -H 'Content-Type: application/
 #### Install dice-embeddings framework
 Install our framework to learn vector representations for knowledge graphs
 ```
-git clone https://github.com/dice-group/dice-embeddings.git && pip install -r dice-embeddings/requirements.txt
+# To install
+conda create -n dice python=3.9.12 && conda activate dice && git clone https://github.com/dice-group/dice-embeddings.git && pip3 install -r dice-embeddings/requirements.txt
+# To test the installation (not required)
+cd dice-embeddings && wget https://hobbitdata.informatik.uni-leipzig.de/KG/KGs.zip && unzip KGs.zip && pytest -p no:warnings -x && cd ..
 ```
 Convert an OWL knowledge base into ntriples to create training dataset for KGE.
 ```python
