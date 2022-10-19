@@ -8,7 +8,7 @@ To this end, DRILL assigns higher scores to those class expression that are like
 Create a anaconda virtual environment and install dependencies.
 ```
 # Clone the repository and create a python virtual enviroment via anaconda
-git clone https://github.com/dice-group/DRILL_RAKI && conda create -n drill_env python=3.9 && conda activate drill_env
+git clone https://github.com/dice-group/DRILL_RAKI && conda create -n drill_env python=3.9.12 && conda activate drill_env
 # Install requirements
 cd DRILL_RAKI && wget --no-check-certificate --content-disposition https://github.com/dice-group/Ontolearn/archive/refs/tags/0.5.1.zip
 unzip Ontolearn-0.5.1.zip && cd Ontolearn-0.5.1 && pip install -e . && cd ..
@@ -36,6 +36,9 @@ conda create -n dice python=3.9.12 && conda activate dice && git clone https://g
 cd dice-embeddings && wget https://hobbitdata.informatik.uni-leipzig.de/KG/KGs.zip && unzip KGs.zip && pytest -p no:warnings -x && cd ..
 ```
 Convert an OWL knowledge base into ntriples to create training dataset for KGE.
+```
+conda activate drill_env
+```
 ```python
 import rdflib
 g = rdflib.Graph()
@@ -45,21 +48,28 @@ g.serialize("KGs/Family/train.txt", format="nt")
 #### Compute Embeddings
 Executing the following command results in creating a folder (KGE_Embeddings) containing all necessary information about the KGE process.
 ```
-python dice-embeddings/main.py --path_dataset_folder "KGs/Family" --storage_path "KGE_Embeddings" --model "ConEx"
+conda activate dice && python dice-embeddings/main.py --path_dataset_folder "KGs/Family" --storage_path "KGE_Embeddings" --model "ConEx" && conda deactivate
 ```
 ## (2) Training via Deep Reinforcement Learning
 To train DRILL, we need to provide the path of a knowledgebase (KGs/Biopax/biopax.owl) and embeddings
 ```
-python drill_train.py --path_knowledge_base "KGs/Family/family-benchmark_rich_background.owl" --path_knowledge_base_embeddings "KGE_Embeddings/2022-05-25 14:22:34.353957/ConEx_entity_embeddings.csv" --num_episode 2 --min_num_concepts 2 --num_of_randomly_created_problems_per_concept 1 --relearn_ratio 2
+conda activate drill_env && python drill_train.py --path_knowledge_base "KGs/Family/family-benchmark_rich_background.owl" --path_knowledge_base_embeddings "KGE_Embeddings/2022-10-19 13:49:23.676673/ConEx_entity_embeddings.csv" --num_episode 2 --min_num_concepts 2 --num_of_randomly_created_problems_per_concept 1 --relearn_ratio 2 && conda deactivate
 ```
 
-### Run an endpoint for DRILL
+### (3) Run an endpoint for DRILL
 To use the endpoint for a pretrained agent, provide the path of the knowledge base as well as the pretrained agent.
 ```
-python flask_end_point.py --pretrained_drill_avg_path "Log/20220525_142307_565226/DrillHeuristic_averaging.pth" --path_knowledge_base "KGs/Family/family-benchmark_rich_background.owl" --path_knowledge_base_embeddings "KGE_Embeddings/2022-05-25 14:22:34.353957/ConEx_entity_embeddings.csv"
+conda activate drill_env && python flask_end_point.py --pretrained_drill_avg_path "Log/20221019_135345_722436/DrillHeuristic_averaging.pth" --path_knowledge_base "KGs/Family/family-benchmark_rich_background.owl" --path_knowledge_base_embeddings "KGE_Embeddings/2022-10-19 13:49:23.676673/ConEx_entity_embeddings.csv" && conda deactivate
+```
+
+### (4) Send a learning problem to 3
+```
+curl -X POST http://0.0.0.0:9080/concept_learning -H 'Content-Type: application/json' -d '{"positives": ["http://www.benchmark.org/family#F9M149"],"negatives": [ "http://www.benchmark.org/family#F9F169"]}'
 ```
 
 ## Docker for using trained DRILL on an endpoint
+If you face any issue in using docker, please follow the 4 step elucidated above.
+
 ```
 # You may want to unzip LPs if you haven't done it earlier
 sudo docker build -t drill:latest "."
