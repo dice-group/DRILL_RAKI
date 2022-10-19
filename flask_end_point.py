@@ -24,7 +24,7 @@ from owlapy.model import IRI
 from owlapy.owlready2 import OWLOntology_Owlready2
 from owlapy.owlready2.temp_classes import OWLReasoner_Owlready2_TempClasses
 from owlapy.fast_instance_checker import OWLReasoner_FastInstanceChecker
-
+from core.trainer import ScalableLengthBasedRefinement
 import logging
 
 setup_logging()
@@ -198,8 +198,15 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     kb = KnowledgeBase(path=args.path_knowledge_base, reasoner_factory=ClosedWorld_ReasonerFactory)
+
+    total_named_concepts = len(set(i for i in kb.ontology().classes_in_signature()))
+    if total_named_concepts < 50:
+        refinement_operator =LengthBasedRefinement(knowledge_base=kb)
+    else:
+        refinement_operator = ScalableLengthBasedRefinement(knowledge_base=kb)
+
     drill = Drill(knowledge_base=kb, path_of_embeddings=args.path_knowledge_base_embeddings,
-                  refinement_operator=LengthBasedRefinement(knowledge_base=kb), quality_func=F1(),
+                  refinement_operator=refinement_operator, quality_func=F1(),
                   batch_size=args.batch_size, num_workers=args.num_workers,
                   pretrained_model_path=args.pretrained_drill_avg_path, verbose=args.verbose,
                   num_of_sequential_actions=args.num_of_sequential_actions)

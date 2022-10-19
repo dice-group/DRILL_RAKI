@@ -21,18 +21,18 @@ logger = logging.getLogger(__name__)
 if __name__ == '__main__':
     parser = ArgumentParser()
     # General
-    parser.add_argument("--path_knowledge_base", default='KGs/Family/family-benchmark_rich_background.owl')
+    parser.add_argument("--path_knowledge_base", default='/home/demir/Desktop/Siemens/KG/cybersecurity_bundle/short_cyber_new.owl')
     parser.add_argument("--path_knowledge_base_embeddings",
-                        default='embeddings/ConEx_Family/ConEx_entity_embeddings.csv')
+                        default='/home/demir/Desktop/Siemens/ConEx_entity_embeddings.csv')
     parser.add_argument("--verbose", type=int, default=10)
     parser.add_argument('--num_workers', type=int, default=4, help='Number of cpus used during batching')
     # Concept Generation Related
     parser.add_argument("--min_num_concepts", type=int, default=1)
-    parser.add_argument("--min_length", type=int, default=4, help='Min length of concepts to be used')
-    parser.add_argument("--max_length", type=int, default=5, help='Max length of concepts to be used')
-    parser.add_argument("--min_num_instances_ratio_per_concept", type=float, default=.01)  # %1
-    parser.add_argument("--max_num_instances_ratio_per_concept", type=float, default=.60)  # %30
-    parser.add_argument("--num_of_randomly_created_problems_per_concept", type=int, default=1)
+    parser.add_argument("--min_length", type=int, default=1, help='Min length of concepts to be used')
+    parser.add_argument("--max_length", type=int, default=1, help='Max length of concepts to be used')
+    parser.add_argument("--min_num_instances_ratio_per_concept", type=float, default=None)  # %1
+    parser.add_argument("--max_num_instances_ratio_per_concept", type=float, default=None)  # %30
+    parser.add_argument("--num_of_randomly_created_problems_per_concept", type=int, default=0)
     parser.add_argument("--refinement_operator", type=str, default='LengthBasedRefinement',
                         choices=['ModifiedCELOERefinement', 'LengthBasedRefinement'])
 
@@ -45,9 +45,9 @@ if __name__ == '__main__':
     parser.add_argument("--num_epochs_per_replay", type=int, default=3,
                         help='Number of epochs on experience replay memory')
     parser.add_argument("--num_episodes_per_replay", type=int, default=10, help='Number of episodes per repay')
-    parser.add_argument('--num_of_sequential_actions', type=int, default=3, help='Length of the trajectory.')
+    parser.add_argument('--num_of_sequential_actions', type=int, default=1, help='Length of the trajectory.')
     parser.add_argument('--relearn_ratio', type=int, default=1, help='# of times lps are reused.')
-    parser.add_argument('--use_illustrations', default=True, type=eval, choices=[True, False])
+    parser.add_argument('--use_illustrations', default=False, type=eval, choices=[True, False])
     parser.add_argument('--use_target_net', default=False, type=eval, choices=[True, False])
 
     # The next two params shows the flexibility of our framework as agents can be continuously trained

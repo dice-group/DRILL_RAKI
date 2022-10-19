@@ -11,9 +11,11 @@ Create a anaconda virtual environment and install dependencies.
 git clone https://github.com/dice-group/DRILL_RAKI && conda create -n drill_env python=3.9.12 && conda activate drill_env
 # Install requirements
 cd DRILL_RAKI && wget --no-check-certificate --content-disposition https://github.com/dice-group/Ontolearn/archive/refs/tags/0.5.1.zip
-unzip Ontolearn-0.5.1.zip && cd Ontolearn-0.5.1 && pip install -e . && cd ..
+unzip Ontolearn-0.5.1.zip && pip3 install -e ./Ontolearn-0.5.1/
 # Test the installation. No error should occur.
-python -c "import ontolearn"
+python3 -c "import ontolearn"
+# To fix owlready2 unoptimized error (not required)
+# conda install -c conda-forge owlready2
 ```
 # Preprocessing 
 Unzip knowledge graphs, embeddings, learning problems and pretrained models.
@@ -31,19 +33,13 @@ curl -X POST http://0.0.0.0:9080/concept_learning -H 'Content-Type: application/
 Install our framework to learn vector representations for knowledge graphs
 ```
 # To install
-conda create -n dice python=3.9.12 && conda activate dice && git clone https://github.com/dice-group/dice-embeddings.git && pip3 install -r dice-embeddings/requirements.txt
+conda create -n dice python=3.9.12 && conda activate dice && git clone https://github.com/dice-group/dice-embeddings.git && pip3 install -r dice-embeddings/requirements.txt && conda deactivate
 # To test the installation (not required)
 cd dice-embeddings && wget https://hobbitdata.informatik.uni-leipzig.de/KG/KGs.zip && unzip KGs.zip && pytest -p no:warnings -x && cd ..
 ```
 Convert an OWL knowledge base into ntriples to create training dataset for KGE.
 ```
-conda activate drill_env
-```
-```python
-import rdflib
-g = rdflib.Graph()
-g.parse("KGs/Family/family-benchmark_rich_background.owl")
-g.serialize("KGs/Family/train.txt", format="nt")
+conda activate drill_env && python -c 'import rdflib;g = rdflib.Graph();g.parse("KGs/Family/family-benchmark_rich_background.owl");g.serialize("KGs/Family/train.txt", format="nt")' && conda deactivate
 ```
 #### Compute Embeddings
 Executing the following command results in creating a folder (KGE_Embeddings) containing all necessary information about the KGE process.
