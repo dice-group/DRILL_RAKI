@@ -1,6 +1,5 @@
 # Deep Reinforcement Learning for Refinement Operators in ALC
 
-This open-source project supported by [RAKI](https://raki-projekt.de/)  contains the Pytorch implementation of DRILL, training and evaluation scripts.
 DRILL is a convolutional deep reinforcement learning agent that effectively accelerates the class expression learning process.
 To this end, DRILL assigns higher scores to those class expression that are likely to lead the search towards goal expressions.
 
@@ -12,44 +11,46 @@ git clone https://github.com/dice-group/DRILL_RAKI && conda create -n drill_env 
 # Install requirements
 cd DRILL_RAKI && wget --no-check-certificate --content-disposition https://github.com/dice-group/Ontolearn/archive/refs/tags/0.5.1.zip
 unzip Ontolearn-0.5.1.zip && cd Ontolearn-0.5.1 && pip install -e . && cd ..
-# Test the installation. No error should occur.
+pip3 install flask==2.2.5
+pip3 install gradio==3.41.2
 python -c "import ontolearn"
 ```
 # Preprocessing 
 Unzip knowledge graphs, embeddings, learning problems and pretrained models.
 ```
-unzip KGs.zip && unzip embeddings.zip && unzip LPs.zip && unzip pre_trained_agents.zip
+unzip KGs.zip && unzip embeddings.zip && unzip LPs.zip && unzip pre_trained_agents.zip && cd ..
 ```
 # Training Deep Reinforcement Learning Agent for Class Expression Learning
 ## (1) Knowledge Graph Embeddings
 #### Install dice-embeddings framework
 Install our framework to learn vector representations for knowledge graphs
 ```
-git clone https://github.com/dice-group/dice-embeddings.git && pip install -r dice-embeddings/requirements.txt
-```
-Convert an OWL knowledge base into ntriples to create training dataset for KGE.
-```python
-import rdflib
-g = rdflib.Graph()
-g.parse("KGs/Family/family-benchmark_rich_background.owl")
-g.serialize("KGs/Family/train.txt", format="nt")
+git clone https://github.com/dice-group/dice-embeddings.git && conda create -n dice python=3.9 && pip install -r dice-embeddings/requirements.txt
 ```
 #### Compute Embeddings
 Executing the following command results in creating a folder (KGE_Embeddings) containing all necessary information about the KGE process.
 ```
-python dice-embeddings/main.py --path_dataset_folder "KGs/Family" --storage_path "KGE_Embeddings" --model "ConEx"
+conda activate dice && python dice-embeddings/main.py --path_single_kg DRILL_RAKI/KGs/Carcinogenesis/carcinogenesis.owl --path_to_store_single_run "KGE_Embeddings" --model "Keci" --batch_size 1024 --num_epochs 2 --save_embeddings_as_csv
 ```
 ## (2) Training via Deep Reinforcement Learning
-To train DRILL, we need to provide the path of a knowledgebase (KGs/Biopax/biopax.owl) and embeddings
+To train DRILL
 ```
-python drill_train.py --path_knowledge_base "KGs/Family/family-benchmark_rich_background.owl" --path_knowledge_base_embeddings "KGE_Embeddings/2022-05-25 14:22:34.353957/ConEx_entity_embeddings.csv" --num_episode 2 --min_num_concepts 2 --num_of_randomly_created_problems_per_concept 1 --relearn_ratio 2
+conda activate drill_env && python DRILL_RAKI/drill_train.py --path_knowledge_base "DRILL_RAKI/KGs/Carcinogenesis/carcinogenesis.owl" --path_knowledge_base_embeddings "KGE_Embeddings/Keci_entity_embeddings.csv" --num_episode 2 --min_num_concepts 2 --num_of_randomly_created_problems_per_concept 1 --relearn_ratio 2
 ```
+creates a directory Log that contains the pretrained agent.
+
 
 ### Run an endpoint for DRILL
 To use the endpoint for a pretrained agent, provide the path of the knowledge base as well as the pretrained agent.
 ```
-python flask_end_point.py --pretrained_drill_avg_path "Log/20220525_142307_565226/DrillHeuristic_averaging.pth" --path_knowledge_base "KGs/Family/family-benchmark_rich_background.owl" --path_knowledge_base_embeddings "KGE_Embeddings/2022-05-25 14:22:34.353957/ConEx_entity_embeddings.csv"
+conda activate drill_env && python DRILL_RAKI/deploy.py --pretrained_drill_avg_path "Log/20230829_111544_927543/DrillHeuristic_averaging.pth" --path_knowledge_base "DRILL_RAKI/KGs/Carcinogenesis/carcinogenesis.owl" --path_knowledge_base_embeddings "KGE_Embeddings/Keci_entity_embeddings.csv"
 ```
+
+
+```
+conda activate drill_env && python DRILL_RAKI/flask_end_point.py --pretrained_drill_avg_path "Log/20230829_111544_927543/DrillHeuristic_averaging.pth" --path_knowledge_base "DRILL_RAKI/KGs/Carcinogenesis/carcinogenesis.owl" --path_knowledge_base_embeddings "KGE_Embeddings/Keci_entity_embeddings.csv"
+```
+
 
 ## Docker for using trained DRILL on an endpoint
 ```
