@@ -1,156 +1,94 @@
+"""
+Deploy our approach
+# positive examples as a string
+http://www.biopax.org/examples/glycolysis#complex273,http://www.biopax.org/examples/glycolysis#complex282
+
+http://www.biopax.org/examples/glycolysis#complex241
+
+"""
+
+import sys
 import os
-import json
-import io
-import threading
-from pathlib import Path
-import tempfile
+import shutil
 import time
-from datetime import datetime
+import traceback
+
+from flask import Flask, request, jsonify
+
+from typing import Dict
+
+import pandas as pd
+import torch
+import gradio as gr
+import tempfile
 from argparse import ArgumentParser
-from functools import wraps, update_wrapper
-from flask import Flask, request, Response, abort
-from flask import make_response
 
 import ontolearn
 from core.model import Drill
 from ontolearn.refinement_operators import LengthBasedRefinement
 from ontolearn.metrics import F1
-from ontolearn.utils import setup_logging
 from ontolearn.knowledge_base import KnowledgeBase
 
-from owlapy.model import OWLOntology, OWLReasoner
-from owlapy.model import OWLNamedIndividual
-from owlapy.model import IRI
+from owlapy.render import DLSyntaxObjectRenderer
+from owlapy.model import OWLNamedIndividual, OWLOntology, OWLReasoner, IRI
 from owlapy.owlready2 import OWLOntology_Owlready2
 from owlapy.owlready2.temp_classes import OWLReasoner_Owlready2_TempClasses
 from owlapy.fast_instance_checker import OWLReasoner_FastInstanceChecker
-
-import logging
-
-setup_logging()
-logger = logging.getLogger(__name__)
-
-# @ TODO: We may want to provide an endpoint without threading.
+app = Flask(__name__)
 kb = None
 drill = None
-args = None
-lock = threading.Lock()
-loading: bool = False
-ready: bool = False
+renderer = DLSyntaxObjectRenderer()
 
 
-def nocache(view):
-    @wraps(view)
-    def no_cache(*args, **kwargs):
-        response = make_response(view(*args, **kwargs))
-        response.headers['Last-Modified'] = datetime.now()
-        response.headers['Cache-Control'] = 'no-store, no-cache, must-revalidate, post-check=0, pre-check=0, max-age=0'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '-1'
-        return response
-
-    return update_wrapper(no_cache, view)
+def load_model(kb, args) -> Drill:
+    return Drill(knowledge_base=kb, path_of_embeddings=args.path_knowledge_base_embeddings,
+                 refinement_operator=LengthBasedRefinement(knowledge_base=kb), quality_func=F1(),
+                 pretrained_model_path=args.pretrained_drill_avg_path, verbose=args.verbose)
 
 
-def sanity_checking(learning_problem, app):
-    if "positives" not in learning_problem:
-        app.logger.debug('positives key does not exist in the input. Exit!')
-        exit(1)
-    if "negatives" not in learning_problem:
-        app.logger.debug('negatives key does not exist in the input. Exit!')
-        exit(1)
-
-    # TODO: Sanity checking
-    # TODO: Whether each input can be mapped into OWLNamedIndividual and such owl individual exist in the input KG
-    # TODO: Whether given concepts to be ignored are valid concepts
-
-
-def create_flask_app():
-    app = Flask(__name__, instance_relative_config=True, )
-
-    @app.route('/concept_learning', methods=['POST'])
-    def concept_learning_endpoint():
-        """
-        Accepts a json objects with parameters "positives" and "negatives". Those must have as value a list of entity
-        strings each. Additionally a HTTP form parameter `no_of_hypotheses` can be provided. If not provided, it
-        defaults to 1.
-        """
-        global lock
-        global ready
-        global args
-        lock.acquire()
-        try:
-            global drill
-            global kb
-            ready = False
-            learning_problem = request.get_json(force=True)
-            app.logger.debug(learning_problem)
-
-            sanity_checking(learning_problem, app)
-
-            no_of_hypotheses = request.form.get("no_of_hypotheses", 1, type=int)
-            try:
-                typed_pos = set(map(OWLNamedIndividual, map(IRI.create, set(learning_problem["positives"]))))
-                typed_neg = set(map(OWLNamedIndividual, map(IRI.create, set(learning_problem["negatives"]))))
-
-                if "ignore_concepts" in learning_problem:
-                    concepts_to_ignore = set(
-                        filter(lambda _: _.get_iri().get_remainder() in learning_problem["ignore_concepts"],
-                               kb.ontology().classes_in_signature()))
-                    if len(concepts_to_ignore) > 0:
-                        # TODO: Do not ask me why we have this ignore_and_copy() :(
-                        kb = kb.ignore_and_copy(ignored_classes=concepts_to_ignore)
-                        drill.knowledge_base = kb
-                        drill.concepts_to_ignore = concepts_to_ignore
-                drill.fit(typed_pos, typed_neg, max_runtime=args.max_test_time_per_concept)
-            except Exception as e:
-                app.logger.debug(e)
-                abort(400)
-            tmp = tempfile.NamedTemporaryFile()
-            try:
-                drill.save_best_hypothesis(no_of_hypotheses, tmp.name)
-            except Exception as ex:
-                print(ex)
-            hypotheses_ser = io.open(tmp.name + '.owl', mode="r", encoding="utf-8").read()
-            Path(tmp.name + '.owl').unlink(True)
-            return Response(hypotheses_ser, mimetype="application/rdf+xml")
-        finally:
-            ready = True
-            lock.release()
-
-    @app.route('/status')
-    @nocache
-    def status_endpoint():
-        global loading
-        global ready
-        if loading:
-            flag = "loading"
-        elif ready:
-            flag = "ready"
-        else:
-            flag = "busy"
-        status = {"status": flag}
-        return status
-
-    @app.before_first_request
-    def set_ready():
-        global lock
-        with lock:
-            global loading
-            loading = False
-            global ready
-            ready = True
-
-    return app
+def is_input_valid(pos: str, neg: str):
+    return len(pos) > 0 and len(pos) > 0
 
 
 def ClosedWorld_ReasonerFactory(onto: OWLOntology) -> OWLReasoner:
     assert isinstance(onto, OWLOntology_Owlready2)
-    base_reasoner = OWLReasoner_Owlready2_TempClasses(ontology=onto)
-    reasoner = OWLReasoner_FastInstanceChecker(ontology=onto,
-                                               base_reasoner=base_reasoner,
-                                               negation_default=True)
-    return reasoner
+    return OWLReasoner_FastInstanceChecker(ontology=onto,
+                                           base_reasoner=OWLReasoner_Owlready2_TempClasses(ontology=onto),
+                                           negation_default=True)
+
+
+@app.route('/predict', methods=['POST'])
+def predict():
+    json_ = request.json
+    print(json_)
+
+    # Map str IRI into OWLNamedIndividual
+    typed_pos = set(map(OWLNamedIndividual, map(IRI.create, json_["positives"])))
+    typed_neg = set(map(OWLNamedIndividual, map(IRI.create, json_["negatives"])))
+    drill.fit(typed_pos, typed_neg, max_runtime=3)
+
+    if json_.get("save_predictions", None):
+        tmp = tempfile.NamedTemporaryFile()
+        drill.save_best_hypothesis(10, tmp.name)
+    data = []
+    for i in drill.best_hypotheses(10):
+        str_rep, f1_score = renderer.render(i.concept), i.quality
+        data.append([str_rep, f1_score])
+
+    # Converting to int from int64
+    return jsonify({"prediction": data})
+
+
+def run(args):
+    # Load data
+    global kb
+    kb = KnowledgeBase(path=args.path_knowledge_base, reasoner_factory=ClosedWorld_ReasonerFactory)
+
+    # Load model
+    global drill
+    drill = load_model(kb, args)
+    # Lunch
+    app.run(host=args.server_name, port=args.server_port, debug=True)
 
 
 if __name__ == '__main__':
@@ -163,45 +101,18 @@ if __name__ == '__main__':
     parser.add_argument("--verbose", type=int, default=0, help='Higher integer reflects more info during computation')
 
     # Concept Generation Related
-    parser.add_argument("--min_num_concepts", type=int, default=1)
-    parser.add_argument("--min_length", type=int, default=3, help='Min length of concepts to be used')
-    parser.add_argument("--max_length", type=int, default=5, help='Max length of concepts to be used')
-    parser.add_argument("--min_num_instances_ratio_per_concept", type=float, default=.01)  # %1
-    parser.add_argument("--max_num_instances_ratio_per_concept", type=float, default=.90)  # %30
-    parser.add_argument("--num_of_randomly_created_problems_per_concept", type=int, default=1)
-    # DQL related
-    parser.add_argument("--num_episode", type=int, default=1, help='Number of trajectories created for a given lp.')
-    parser.add_argument('--relearn_ratio', type=int, default=1,
-                        help='Number of times the set of learning problems are reused during training.')
-    parser.add_argument("--gamma", type=float, default=.99, help='The discounting rate')
-    parser.add_argument("--epsilon_decay", type=float, default=.01, help='Epsilon greedy trade off per epoch')
-    parser.add_argument("--max_len_replay_memory", type=int, default=1024,
-                        help='Maximum size of the experience replay')
-    parser.add_argument("--num_epochs_per_replay", type=int, default=2,
-                        help='Number of epochs on experience replay memory')
-    parser.add_argument("--num_episodes_per_replay", type=int, default=10, help='Number of episodes per repay')
     parser.add_argument('--num_of_sequential_actions', type=int, default=3, help='Length of the trajectory.')
 
-    # The next two params shows the flexibility of our framework as agents can be continuously trained
     parser.add_argument('--pretrained_drill_avg_path', type=str,
-                        default='pre_trained/DrillHeuristic_averaging.pth', help='Provide a path of .pth file')
-    # NN related
-    parser.add_argument("--batch_size", type=int, default=512)
-    parser.add_argument("--learning_rate", type=int, default=.01)
-    parser.add_argument("--drill_first_out_channels", type=int, default=32)
-
+                        default='pre_trained_agents/Biopax/DrillHeuristic_averaging/DrillHeuristic_averaging.pth',
+                        help='Provide a path of .pth file')
     # Concept Learning Testing
     parser.add_argument("--iter_bound", type=int, default=10_000, help='iter_bound during testing.')
     parser.add_argument('--max_test_time_per_concept', type=int, default=3, help='Max. runtime during testing')
-
-    loading = True
-    args = parser.parse_args()
-
-    kb = KnowledgeBase(path=args.path_knowledge_base, reasoner_factory=ClosedWorld_ReasonerFactory)
-    drill = Drill(knowledge_base=kb, path_of_embeddings=args.path_knowledge_base_embeddings,
-                  refinement_operator=LengthBasedRefinement(knowledge_base=kb), quality_func=F1(),
-                  batch_size=args.batch_size, num_workers=args.num_workers,
-                  pretrained_model_path=args.pretrained_drill_avg_path, verbose=args.verbose,
-                  num_of_sequential_actions=args.num_of_sequential_actions)
-    app = create_flask_app()
-    app.run(host="0.0.0.0", port=9080, processes=1)  # processes=1 is important to avoid copying the kb
+    # Inference Related
+    parser.add_argument("--topk", type=int, default=10,
+                        help='Return top k concepts')
+    parser.add_argument('--use_search', default='None', help='None,SmartInit')
+    parser.add_argument('--server_port', default=7860, type=int)
+    parser.add_argument('--server_name', default="0.0.0.0")
+    run(parser.parse_args())
