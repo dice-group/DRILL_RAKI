@@ -5,6 +5,11 @@ http://www.biopax.org/examples/glycolysis#complex273,http://www.biopax.org/examp
 
 http://www.biopax.org/examples/glycolysis#complex241
 
+
+
+curl -X POST http://127.0.0.1:7860/predict -H 'Content-Type: application/json' -d '{"positives": ["http://www.biopax.org/examples/glycolysis#complex265"],"negatives": [ "http://www.biopax.org/examples/glycolysis#complex191"]}'
+
+
 """
 from typing import Dict
 
@@ -25,46 +30,99 @@ from owlapy.model import OWLNamedIndividual, OWLOntology, OWLReasoner, IRI
 from owlapy.owlready2 import OWLOntology_Owlready2
 from owlapy.owlready2.temp_classes import OWLReasoner_Owlready2_TempClasses
 from owlapy.fast_instance_checker import OWLReasoner_FastInstanceChecker
+from flask import Flask, request, jsonify
 
-def load_model(kb, args) -> Drill:
-    return Drill(knowledge_base=kb, path_of_embeddings=args.path_knowledge_base_embeddings,
-                 refinement_operator=LengthBasedRefinement(knowledge_base=kb), quality_func=F1(),
-                 pretrained_model_path=args.pretrained_drill_avg_path, verbose=args.verbose)
+app = Flask(__name__)
+kb = None
+drill = None
+renderer = DLSyntaxObjectRenderer()
+topk = None
+max_test_time_per_concept = None
 
 
-def is_input_valid(pos: str, neg: str):
-    return len(pos) > 0 and len(pos) > 0
+def collect_lp():
+    if "ignore_concepts" in learning_problem:
+        concepts_to_ignore = set(
+            filter(lambda _: _.get_iri().get_remainder() in learning_problem["ignore_concepts"],
+                   kb.ontology().classes_in_signature()))
+        if len(concepts_to_ignore) > 0:
+            # TODO: Do not ask me why we have this ignore_and_copy() :(
+            kb = kb.ignore_and_copy(ignored_classes=concepts_to_ignore)
+            drill.knowledge_base = kb
+            drill.concepts_to_ignore = concepts_to_ignore
 
 
-def launch_service(drill, kb, max_test_time_per_concept, server_name: str = None, server_port: int = None):
-    renderer=DLSyntaxObjectRenderer()
+@app.route('/predict', methods=['POST'])
+def predict():
+    json_ = request.json
+    print(json_)
+    # Map str IRI into OWLNamedIndividual
+    typed_pos = set(map(OWLNamedIndividual, map(IRI.create, json_["positives"])))
+    typed_neg = set(map(OWLNamedIndividual, map(IRI.create, json_["negatives"])))
+    drill.fit(typed_pos, typed_neg, max_runtime=3)
 
-    def predict(positive_examples, negative_examples, save_predictions):
-        if is_input_valid(positive_examples, negative_examples):
-            pos_str = positive_examples.split(",")
-            neg_str = negative_examples.split(",")
-            if len(pos_str) < 20:
-                s = f'E^+:{",".join(pos_str)}\nE^-:{",".join(neg_str)}\n'
-            else:
-                s = f'|E^+|:{len(pos_str)}\n|E^-|:{len(neg_str)}\n'
-            # Map str IRI into OWLNamedIndividual
-            typed_pos = set(map(OWLNamedIndividual, map(IRI.create, pos_str)))
-            typed_neg = set(map(OWLNamedIndividual, map(IRI.create, neg_str)))
-            drill.fit(typed_pos, typed_neg, max_runtime=max_test_time_per_concept)
+    if json_.get("save_predictions", None):
+        tmp = tempfile.NamedTemporaryFile()
+        drill.save_best_hypothesis(topk, tmp.name)
+    data = []
+    for i in drill.best_hypotheses(topk):
+        str_rep, f1_score = renderer.render(i.concept), i.quality
+        data.append([str_rep, f1_score])
 
-            if save_predictions:
-                tmp = tempfile.NamedTemporaryFile()
-                drill.save_best_hypothesis(10, tmp.name)
-            data=[]
-            for i in drill.best_hypotheses(10):
-                str_rep, f1_score=renderer.render(i.concept), i.quality
-                data.append([str_rep, f1_score])
-            return s, pd.DataFrame(data=data,columns=["Concept", "F1-score"])
-        else:
-            return f"Invalid Input:{positive_examples}***{negative_examples}", pd.DataFrame([0, 0, 0])
+    # Converting to int from int64
+    return jsonify({"prediction": data})
 
+
+@app.route('/', methods=['GET'])
+def hello():
+    return "<p>Hello, World!</p>"
+
+
+@app.route('/status', methods=['GET'])
+def status():
+    return "<p>Hello, World!</p>"
+
+
+def prepare_learning_problem(positive_examples: str, negative_examples: str, app=None):
+    pos_str_list = set(positive_examples.split(","))
+    neg_str_list = set(negative_examples.split(","))
+
+    if app:
+        app.logger.debug(pos_str_list)
+        app.logger.debug(neg_str_list)
+    else:
+        print("Positive Examples:", pos_str_list)
+        print("Negative Examples:", neg_str_list)
+
+    if len(pos_str_list) < 20:
+        str_lr = f'E^+:{",".join(pos_str_list)}\nE^-:{",".join(neg_str_list)}\n'
+    else:
+        str_lr = f'|E^+|:{len(pos_str_list)}\n|E^-|:{len(neg_str_list)}\n'
+
+    # Map str IRI into OWLNamedIndividual
+    typed_pos = set(map(OWLNamedIndividual, map(IRI.create, pos_str_list)))
+    typed_neg = set(map(OWLNamedIndividual, map(IRI.create, neg_str_list)))
+
+    print("Typed Positive Examples:", typed_pos)
+    print("Typed Negative Examples:", typed_neg)
+    return typed_pos, typed_neg, str_lr
+
+
+def predict_gradio(positive_examples: str, negative_examples: str, save_predictions: bool):
+    typed_pos, typed_neg, str_lr = prepare_learning_problem(positive_examples, negative_examples)
+    drill.fit(typed_pos, typed_neg, max_runtime=max_test_time_per_concept)
+    if save_predictions:
+        tmp = tempfile.NamedTemporaryFile()
+        drill.save_best_hypothesis(topk, tmp.name)
+    data = []
+    for i in drill.best_hypotheses(topk):
+        str_rep, f1_score = renderer.render(i.concept), i.quality
+        data.append([str_rep, f1_score])
+    return str_lr, pd.DataFrame(data=data, columns=["Concept", "F1-score"])
+
+def launch_web_application(server_name: str = None, server_port: int = None):
     gr.Interface(
-        fn=predict,
+        fn=predict_gradio,
         inputs=[gr.inputs.Textbox(lines=5, placeholder=None, label='Positive Examples'),
                 gr.inputs.Textbox(lines=5, placeholder=None, label='Negative Examples'),
                 "checkbox"],
@@ -74,45 +132,48 @@ def launch_service(drill, kb, max_test_time_per_concept, server_name: str = None
         description='Click Random Examples & Submit.').launch(server_name=server_name,
                                                               server_port=server_port,
                                                               share=False)
+
+
 def ClosedWorld_ReasonerFactory(onto: OWLOntology) -> OWLReasoner:
     assert isinstance(onto, OWLOntology_Owlready2)
     return OWLReasoner_FastInstanceChecker(ontology=onto,
-                                               base_reasoner=OWLReasoner_Owlready2_TempClasses(ontology=onto),
-                                               negation_default=True)
+                                           base_reasoner=OWLReasoner_Owlready2_TempClasses(ontology=onto),
+                                           negation_default=True)
 
 
 def run(args):
+    global kb
     # Load data
     kb = KnowledgeBase(path=args.path_knowledge_base, reasoner_factory=ClosedWorld_ReasonerFactory)
+    global drill
     # Load model
-    drill = load_model(kb, args)
-    # Load model
-    launch_service(drill, kb, max_test_time_per_concept=args.max_test_time_per_concept, server_name=args.server_name,
-                   server_port=args.server_port)
+    drill = Drill(knowledge_base=kb, path_of_embeddings=args.path_knowledge_base_embeddings,
+                  refinement_operator=LengthBasedRefinement(knowledge_base=kb), quality_func=F1(),
+                  pretrained_model_path=args.pretrained_drill_avg_path)
+    global topk
+    topk = args.topk
+    global max_test_time_per_concept
+    max_test_time_per_concept = args.max_test_time_per_concept
+    if args.only_end_point == 0:
+        launch_web_application(server_name=args.server_name,
+                               server_port=args.server_port)
+    else:
+        # launch end point
+        app.run(host=args.server_name, port=args.server_port,
+                processes=1)  # processes=1 is important to avoid copying the kb
 
 
 if __name__ == '__main__':
     parser = ArgumentParser()
-    # General
     parser.add_argument("--path_knowledge_base", type=str, default='KGs/Biopax/biopax.owl')
     parser.add_argument("--path_knowledge_base_embeddings", type=str,
                         default='embeddings/ConEx_Biopax/ConEx_entity_embeddings.csv')
-    parser.add_argument('--num_workers', type=int, default=1, help='Number of cpus used during batching')
-    parser.add_argument("--verbose", type=int, default=0, help='Higher integer reflects more info during computation')
-
-    # Concept Generation Related
-    parser.add_argument('--num_of_sequential_actions', type=int, default=3, help='Length of the trajectory.')
-
     parser.add_argument('--pretrained_drill_avg_path', type=str,
                         default='pre_trained_agents/Biopax/DrillHeuristic_averaging/DrillHeuristic_averaging.pth',
                         help='Provide a path of .pth file')
-    # Concept Learning Testing
-    parser.add_argument("--iter_bound", type=int, default=10_000, help='iter_bound during testing.')
     parser.add_argument('--max_test_time_per_concept', type=int, default=3, help='Max. runtime during testing')
-    # Inference Related
-    parser.add_argument("--topk", type=int, default=10,
-                        help='Return top k concepts')
-    parser.add_argument('--use_search', default='None', help='None,SmartInit')
+    parser.add_argument("--topk", type=int, default=10, help='Return top k concepts')
+    parser.add_argument("--only_end_point", type=int, default=1, help="0 for web service, 1 for endpoint")
     parser.add_argument('--server_port', default=7860, type=int)
     parser.add_argument('--server_name', default="0.0.0.0")
     run(parser.parse_args())

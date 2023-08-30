@@ -39,27 +39,26 @@ conda activate drill_env && python DRILL_RAKI/drill_train.py --path_knowledge_ba
 ```
 creates a directory Log that contains the pretrained agent.
 
-
-### Run an endpoint for DRILL
-To use the endpoint for a pretrained agent, provide the path of the knowledge base as well as the pretrained agent.
-```
+### (3) Deploy DRILL
+DRILL can be deployed within a web application or an endpoint.
+To deploy DRILL in an end point:
+```bash
 conda activate drill_env && python DRILL_RAKI/deploy.py --pretrained_drill_avg_path "Log/20230829_111544_927543/DrillHeuristic_averaging.pth" --path_knowledge_base "DRILL_RAKI/KGs/Carcinogenesis/carcinogenesis.owl" --path_knowledge_base_embeddings "KGE_Embeddings/Keci_entity_embeddings.csv"
 ```
-
-
+Send a learning problem related to Biopax dataset
+```bash
+curl -X POST http://127.0.0.1:7860/predict -H 'Content-Type: application/json' -d '{"positives": ["http://www.biopax.org/examples/glycolysis#complex265"],"negatives": [ "http://www.biopax.org/examples/glycolysis#complex191"]}'
 ```
-conda activate drill_env && python DRILL_RAKI/flask_end_point.py --pretrained_drill_avg_path "Log/20230829_111544_927543/DrillHeuristic_averaging.pth" --path_knowledge_base "DRILL_RAKI/KGs/Carcinogenesis/carcinogenesis.owl" --path_knowledge_base_embeddings "KGE_Embeddings/Keci_entity_embeddings.csv"
-```
 
 
-## Docker for using trained DRILL on an endpoint
+## TODO: Docker for using trained DRILL on an endpoint
 ```
 # You may want to unzip LPs if you haven't done it earlier
 sudo docker build -t drill:latest "."
 # Successfully tagged drill:latest # if you see **done**, all went well
 sudo docker images # to see installed image
 ```
-### Run the docker image.
+### TODO: Run the docker image.
 ```
 sudo docker run \
 -e KG=Biopax/biopax.owl \
@@ -69,10 +68,7 @@ drill:latest
 ```
 ### How to use the endpoint
 ```
-# (1) Open a new terminal (Ctrl+Alt+T on ubuntu) to verify the endpoint.
-curl http://172.17.0.2:9080/status
-{"status":"ready"} # If you see this  all went well :)
-# (2) Use an example learning problem
+# (1) Use an example learning problem
 jq '
    .problems
      ."((pathwayStep ⊓ (∀INTERACTION-TYPE.Thing)) ⊔ (sequenceInterval ⊓ (∀ID-VERSION.Thing)))"
@@ -84,7 +80,7 @@ jq '
 ```
 ### Standard Class Expression Learning
 ```
-curl -X POST http://0.0.0.0:9080/concept_learning -H 'Content-Type: application/json' -d '{"positives": ["http://www.benchmark.org/family#F9M149"],"negatives": [ "http://www.benchmark.org/family#F9F169"]}'
+curl -X POST http://0.0.0.0:9080/predict -H 'Content-Type: application/json' -d '{"positives": ["http://www.benchmark.org/family#F9M149"],"negatives": [ "http://www.benchmark.org/family#F9F169"]}'
 # Expected output
 <?xml version="1.0"?>
 <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
@@ -106,7 +102,7 @@ curl -X POST http://0.0.0.0:9080/concept_learning -H 'Content-Type: application/
 ```
 ### Positive Only Class Expression Learning
 ```
-curl -X POST http://0.0.0.0:9080/concept_learning -H 'Content-Type: application/json' -d '{"positives": ["http://www.benchmark.org/family#F9M149"],"negatives": []}'
+curl -X POST http://0.0.0.0:9080/predict -H 'Content-Type: application/json' -d '{"positives": ["http://www.benchmark.org/family#F9M149"],"negatives": []}'
 # Note that negatives must be an empty list 
 # Expected output
 <?xml version="1.0"?>
