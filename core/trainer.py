@@ -21,22 +21,24 @@ class Trainer:
     def start(self):
         # 1. Parse KG.
         kb = KnowledgeBase(path=self.args.path_knowledge_base, reasoner_factory=ClosedWorld_ReasonerFactory)
-
         min_num_instances = self.args.min_num_instances_ratio_per_concept * kb.individuals_count()
         max_num_instances = self.args.max_num_instances_ratio_per_concept * kb.individuals_count()
 
         # 2. Generate Learning Problems.
+        print("Learning Problem Generator...")
         lp = LearningProblemGenerator(knowledge_base=kb,
                                       min_length=self.args.min_length,
                                       max_length=self.args.max_length,
                                       min_num_instances=min_num_instances,
                                       max_num_instances=max_num_instances)
+        print("Generate balanced learning problems...")
         balanced_examples = lp.get_balanced_n_samples_per_examples(
             n=self.args.num_of_randomly_created_problems_per_concept,
             min_length=self.args.min_length,
             max_length=self.args.max_length,
             min_num_problems=self.args.min_num_concepts,
             num_diff_runs=self.args.min_num_concepts // 2)
+        print("initialize DRILL...")
         drill = Drill(knowledge_base=kb, path_of_embeddings=self.args.path_knowledge_base_embeddings,
                       refinement_operator=ModifiedCELOERefinement(
                           knowledge_base=kb) if self.args.refinement_operator == 'ModifiedCELOERefinement' else LengthBasedRefinement(

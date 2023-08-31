@@ -21,31 +21,31 @@ logger = logging.getLogger(__name__)
 if __name__ == '__main__':
     parser = ArgumentParser()
     # General
-    parser.add_argument("--path_knowledge_base", default='KGs/Family/family-benchmark_rich_background.owl')
+    parser.add_argument("--path_knowledge_base", default='/home/demir/Desktop/1667182935.owl')
     parser.add_argument("--path_knowledge_base_embeddings",
-                        default='embeddings/ConEx_Family/ConEx_entity_embeddings.csv')
+                        default='/home/demir/Desktop/3rybq0QxQv.DistMult_entity_embeddings.csv')
     parser.add_argument("--verbose", type=int, default=10)
-    parser.add_argument('--num_workers', type=int, default=4, help='Number of cpus used during batching')
+    parser.add_argument('--num_workers', type=int, default=1, help='Number of cpus used during batching')
     # Concept Generation Related
-    parser.add_argument("--min_num_concepts", type=int, default=1)
-    parser.add_argument("--min_length", type=int, default=4, help='Min length of concepts to be used')
-    parser.add_argument("--max_length", type=int, default=5, help='Max length of concepts to be used')
+    parser.add_argument("--min_num_concepts", type=int, default=0)
+    parser.add_argument("--min_length", type=int, default=1, help='Min length of concepts to be used')
+    parser.add_argument("--max_length", type=int, default=1, help='Max length of concepts to be used')
     parser.add_argument("--min_num_instances_ratio_per_concept", type=float, default=.01)  # %1
-    parser.add_argument("--max_num_instances_ratio_per_concept", type=float, default=.60)  # %30
+    parser.add_argument("--max_num_instances_ratio_per_concept", type=float, default=.99)  # %30
     parser.add_argument("--num_of_randomly_created_problems_per_concept", type=int, default=1)
     parser.add_argument("--refinement_operator", type=str, default='LengthBasedRefinement',
                         choices=['ModifiedCELOERefinement', 'LengthBasedRefinement'])
 
     # DQL related
     parser.add_argument("--gamma", type=float, default=.99, help='The discounting rate')
-    parser.add_argument("--num_episode", type=int, default=5, help='Number of trajectories created for a given lp.')
+    parser.add_argument("--num_episode", type=int, default=1, help='Number of trajectories created for a given lp.')
     parser.add_argument("--epsilon_decay", type=float, default=.01, help='Epsilon greedy trade off per epoch')
     parser.add_argument("--max_len_replay_memory", type=int, default=1024,
                         help='Maximum size of the experience replay')
-    parser.add_argument("--num_epochs_per_replay", type=int, default=3,
+    parser.add_argument("--num_epochs_per_replay", type=int, default=1,
                         help='Number of epochs on experience replay memory')
-    parser.add_argument("--num_episodes_per_replay", type=int, default=10, help='Number of episodes per repay')
-    parser.add_argument('--num_of_sequential_actions', type=int, default=3, help='Length of the trajectory.')
+    parser.add_argument("--num_episodes_per_replay", type=int, default=1, help='Number of episodes per repay')
+    parser.add_argument('--num_of_sequential_actions', type=int, default=1, help='Length of the trajectory.')
     parser.add_argument('--relearn_ratio', type=int, default=1, help='# of times lps are reused.')
     parser.add_argument('--use_illustrations', default=True, type=eval, choices=[True, False])
     parser.add_argument('--use_target_net', default=False, type=eval, choices=[True, False])
