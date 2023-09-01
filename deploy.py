@@ -143,10 +143,10 @@ def ClosedWorld_ReasonerFactory(onto: OWLOntology) -> OWLReasoner:
 
 def run(args):
     global kb
-    # Load data
+    # Load data.
     kb = KnowledgeBase(path=args.path_knowledge_base, reasoner_factory=ClosedWorld_ReasonerFactory)
     global drill
-    # Load model
+    # Load model.
     drill = Drill(knowledge_base=kb, path_of_embeddings=args.path_knowledge_base_embeddings,
                   refinement_operator=LengthBasedRefinement(knowledge_base=kb), quality_func=F1(),
                   pretrained_model_path=args.pretrained_drill_avg_path)
@@ -158,19 +158,13 @@ def run(args):
         launch_web_application(server_name=args.server_name,
                                server_port=args.server_port)
     else:
-        # launch end point
-        app.run(host=args.server_name, port=args.server_port,
-                processes=1)  # processes=1 is important to avoid copying the kb
-
-
+        app.run(host=args.server_name, port=args.server_port, processes=1)
 if __name__ == '__main__':
     parser = ArgumentParser()
-    parser.add_argument("--path_knowledge_base", type=str, default='KGs/Biopax/biopax.owl')
-    parser.add_argument("--path_knowledge_base_embeddings", type=str,
-                        default='embeddings/ConEx_Biopax/ConEx_entity_embeddings.csv')
+    parser.add_argument("--path_knowledge_base", type=str)
+    parser.add_argument("--path_knowledge_base_embeddings", type=str)
     parser.add_argument('--pretrained_drill_avg_path', type=str,
-                        default='pre_trained_agents/Biopax/DrillHeuristic_averaging/DrillHeuristic_averaging.pth',
-                        help='Provide a path of .pth file')
+                        default=None,help='Provide a path of .pth file')
     parser.add_argument('--max_test_time_per_concept', type=int, default=3, help='Max. runtime during testing')
     parser.add_argument("--topk", type=int, default=10, help='Return top k concepts')
     parser.add_argument("--only_end_point", type=int, default=1, help="0 for web service, 1 for endpoint")
