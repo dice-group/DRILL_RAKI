@@ -19,8 +19,10 @@ class Trainer:
             json.dump(temp, file_descriptor)
 
     def start(self):
+	print("start parsing ... "+ str(self.args.path_knowledge_base)+" reasoner"+str(ClosedWorld_ReasonerFactory))
         # 1. Parse KG.
         kb = KnowledgeBase(path=self.args.path_knowledge_base, reasoner_factory=ClosedWorld_ReasonerFactory)
+	print("done parsing")
         min_num_instances = self.args.min_num_instances_ratio_per_concept * kb.individuals_count()
         max_num_instances = self.args.max_num_instances_ratio_per_concept * kb.individuals_count()
 
