@@ -45,28 +45,26 @@ To deploy DRILL in an end point:
 ```bash
 conda activate drill_env && python DRILL_RAKI/deploy.py --pretrained_drill_avg_path "Log/20230829_111544_927543/DrillHeuristic_averaging.pth" --path_knowledge_base "DRILL_RAKI/KGs/Carcinogenesis/carcinogenesis.owl" --path_knowledge_base_embeddings "KGE_Embeddings/Keci_entity_embeddings.csv"
 ```
-Send a learning problem related to Biopax dataset
+Send a learning problem related to Carcinogenesis dataset
 ```bash
-curl -X POST http://127.0.0.1:7860/predict -H 'Content-Type: application/json' -d '{"positives": ["http://www.biopax.org/examples/glycolysis#complex265"],"negatives": [ "http://www.biopax.org/examples/glycolysis#complex191"]}'
+curl -X POST http://0.0.0.0:7860/predict -H 'Content-Type: application/json' -d '{"positives": ["http://www.biopax.org/examples/glycolysis#complex265"],"negatives": [ "http://www.biopax.org/examples/glycolysis#complex191"]}'
 ```
 
-
-## TODO: Docker for using trained DRILL on an endpoint
+### Deploy DRILL via Docker
 ```
-# You may want to unzip LPs if you haven't done it earlier
-sudo docker build -t drill:latest "."
-# Successfully tagged drill:latest # if you see **done**, all went well
-sudo docker images # to see installed image
+sudo docker build  -t drill:latest "."
 ```
-### TODO: Run the docker image.
+and 
 ```
-sudo docker run \
--e KG=Biopax/biopax.owl \
--e EMBEDDINGS=ConEx_Biopax/ConEx_entity_embeddings.csv \
--e PRE_TRAINED_AGENT=Biopax/DrillHeuristic_averaging/DrillHeuristic_averaging.pth \
-drill:latest
+sudo docker run -p 7860:7860 -e KG=Biopax/biopax.owl -e EMBEDDINGS=ConEx_Biopax/ConEx_entity_embeddings.csv -e PRE_TRAINED_AGENT=Biopax/DrillHeuristic_averaging/DrillHeuristic_averaging.pth -e INTERFACE=0 drill:latest
 ```
-### How to use the endpoint
+```
+python deploy.py --path_knowledge_base "KGs/Biopax/biopax.owl" --path_knowledge_base_embeddings "embeddings/ConEx_Biopax/ConEx_entity_embeddings.csv" --pretrained_drill_avg_path "pre_trained_agents/Biopax/DrillHeuristic_averaging/DrillHeuristic_averaging.pth"
+```
+to send a learning problem
+```
+curl -X POST http://0.0.0.0:7860/predict -H 'Content-Type: application/json' -d '{"positives": ["http://www.biopax.org/examples/glycolysis#complex139"], "negatives": [ "http://www.biopax.org/examples/glycolysis#complex191"]}'
+```
 ```
 # (1) Use an example learning problem
 jq '
@@ -80,7 +78,7 @@ jq '
 ```
 ### Standard Class Expression Learning
 ```
-curl -X POST http://0.0.0.0:9080/predict -H 'Content-Type: application/json' -d '{"positives": ["http://www.benchmark.org/family#F9M149"],"negatives": [ "http://www.benchmark.org/family#F9F169"]}'
+curl -X POST http://0.0.0.0:7860/predict -H 'Content-Type: application/json' -d '{"positives": ["http://www.benchmark.org/family#F9M149"],"negatives": [ "http://www.benchmark.org/family#F9F169"]}'
 # Expected output
 <?xml version="1.0"?>
 <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
