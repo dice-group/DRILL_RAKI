@@ -34,12 +34,15 @@ class Trainer:
                                       min_num_instances=min_num_instances,
                                       max_num_instances=max_num_instances)
         print("Generate balanced learning problems...")
-        balanced_examples = lp.get_balanced_n_samples_per_examples(
-            n=self.args.num_of_randomly_created_problems_per_concept,
-            min_length=self.args.min_length,
-            max_length=self.args.max_length,
-            min_num_problems=self.args.min_num_concepts,
-            num_diff_runs=self.args.min_num_concepts // 2)
+        if self.args.min_num_concepts>0:
+            balanced_examples = lp.get_balanced_n_samples_per_examples(
+                n=self.args.num_of_randomly_created_problems_per_concept,
+                min_length=self.args.min_length,
+                max_length=self.args.max_length,
+                min_num_problems=self.args.min_num_concepts,
+                num_diff_runs=self.args.min_num_concepts // 2)
+        else:
+            balanced_examples=[]
         print("initialize DRILL...")
         drill = Drill(knowledge_base=kb, path_of_embeddings=self.args.path_knowledge_base_embeddings,
                       refinement_operator=ModifiedCELOERefinement(
@@ -56,17 +59,18 @@ class Trainer:
 
         drill.train(balanced_examples)
         drill.save_weights()
-        renderer = DLSyntaxObjectRenderer()
-        test_data = [
-            {'target_concept': renderer.render(rl_state.concept),
-             'positive_examples': {i.get_iri().as_str() for i in typed_p},
-             'negative_examples': {i.get_iri().as_str() for i in typed_n}, 'ignore_concepts': set()} for
-            rl_state, typed_p, typed_n in balanced_examples]
-        for result_dict, learning_problem in zip(
-                drill.fit_from_iterable(test_data, max_runtime=self.args.max_test_time_per_concept),
-                test_data):
-            print(f'\nTarget Class Expression:{learning_problem["target_concept"]}')
-            print(
-                f'| sampled E^+|:{len(learning_problem["positive_examples"])}\t| sampled E^-|:{len(learning_problem["negative_examples"])}')
-            for k, v in result_dict.items():
-                print(f'{k}:{v}')
+        if balanced_examples:
+            renderer = DLSyntaxObjectRenderer()
+            test_data = [
+                {'target_concept': renderer.render(rl_state.concept),
+                 'positive_examples': {i.get_iri().as_str() for i in typed_p},
+                 'negative_examples': {i.get_iri().as_str() for i in typed_n}, 'ignore_concepts': set()} for
+                rl_state, typed_p, typed_n in balanced_examples]
+            for result_dict, learning_problem in zip(
+                    drill.fit_from_iterable(test_data, max_runtime=self.args.max_test_time_per_concept),
+                    test_data):
+                print(f'\nTarget Class Expression:{learning_problem["target_concept"]}')
+                print(
+                    f'| sampled E^+|:{len(learning_problem["positive_examples"])}\t| sampled E^-|:{len(learning_problem["negative_examples"])}')
+                for k, v in result_dict.items():
+                    print(f'{k}:{v}')
