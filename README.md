@@ -3,6 +3,8 @@
 DRILL is a convolutional deep reinforcement learning agent that effectively accelerates the class expression learning process.
 To this end, DRILL assigns higher scores to those class expression that are likely to lead the search towards goal expressions.
 
+# We created [Ontolearn](https://github.com/dice-group/Ontolearn) involving DRILL and many other learners
+
 # Installation
 Create a anaconda virtual environment and install dependencies.
 ```
